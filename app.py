@@ -334,6 +334,7 @@ def handle_multiple_segments_submission(ack, body, client):
                 
                 created_segments = []
                 failed_segments = []
+                processed = 0
                 
                 for country in countries:
                     for seg_type_value in segment_types:
@@ -360,6 +361,15 @@ def handle_multiple_segments_submission(ack, body, client):
                             if ok:
                                 created_segments.append(name)
                                 logger.info(f"✅ Created: {name}")
+                                # Send immediate success notification
+                                try:
+                                    client.chat_postEphemeral(
+                                        channel=channel_id,
+                                        user=user_id,
+                                        text=f"✅ Created: `{name}`"
+                                    )
+                                except:
+                                    pass
                             else:
                                 failed_segments.append(name)
                                 logger.error(f"❌ Failed: {name} (probably already exists or server error)")
@@ -367,6 +377,18 @@ def handle_multiple_segments_submission(ack, body, client):
                         except Exception as e:
                             failed_segments.append(f"{country}_{seg_type}_{value}")
                             logger.error(f"❌ Exception creating {country}_{seg_type}_{value}: {e}")
+                        
+                        processed += 1
+                        # Send progress update every 5 segments
+                        if processed % 5 == 0:
+                            try:
+                                client.chat_postEphemeral(
+                                    channel=channel_id,
+                                    user=user_id,
+                                    text=f"🔄 Progress: {processed}/{total_segments} processed, {len(created_segments)} created so far..."
+                                )
+                            except:
+                                pass
                         
                         time.sleep(0.5)
                 
