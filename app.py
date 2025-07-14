@@ -46,7 +46,8 @@ POPULAR_COUNTRIES = [
     {"text": {"type": "plain_text", "text": "🇦🇺 AUS - Australia"}, "value": "AUS"},
     {"text": {"type": "plain_text", "text": "🇲🇽 MEX - Mexico"}, "value": "MEX"},
     {"text": {"type": "plain_text", "text": "🇪🇸 ESP - Spain"}, "value": "ESP"},
-    {"text": {"type": "plain_text", "text": "🇮🇹 ITA - Italy"}, "value": "ITA"}
+    {"text": {"type": "plain_text", "text": "🇮🇹 ITA - Italy"}, "value": "ITA"},
+    {"text": {"type": "plain_text", "text": "🇷🇺 RUS - Russia"}, "value": "RUS"}
 ]
 
 # Segment types - only 5 options
@@ -361,11 +362,11 @@ def handle_multiple_segments_submission(ack, body, client):
                                 logger.info(f"✅ Created: {name}")
                             else:
                                 failed_segments.append(name)
-                                logger.error(f"❌ Failed: {name}")
+                                logger.error(f"❌ Failed: {name} (probably already exists or server error)")
                                 
                         except Exception as e:
                             failed_segments.append(f"{country}_{seg_type}_{value}")
-                            logger.error(f"❌ Error creating segment {country}_{seg_type}_{value}: {e}")
+                            logger.error(f"❌ Exception creating {country}_{seg_type}_{value}: {e}")
                         
                         time.sleep(0.5)
                 
@@ -373,13 +374,18 @@ def handle_multiple_segments_submission(ack, body, client):
                 fail_count = len(failed_segments)
                 
                 if success_count > 0 and fail_count == 0:
-                    msg = f"🎉 *All {success_count} segments created successfully!*\n\n📋 Created segments:\n" + "\n".join([f"• `{name}`" for name in created_segments[:10]])
-                    if success_count > 10:
-                        msg += f"\n... and {success_count - 10} more"
+                    msg = f"🎉 *All {success_count} segments created successfully!*\n\n📋 Created segments:\n" + "\n".join([f"• `{name}`" for name in created_segments])
                 elif success_count > 0 and fail_count > 0:
-                    msg = f"⚠️ *Partially completed: {success_count}/{total_segments} segments created*\n\n✅ Success: {success_count}\n❌ Failed: {fail_count}"
+                    msg = f"⚠️ *Partially completed: {success_count}/{total_segments} segments created*\n\n"
+                    if created_segments:
+                        msg += f"✅ *Created ({success_count}):*\n" + "\n".join([f"• `{name}`" for name in created_segments[:10]])
+                        if len(created_segments) > 10:
+                            msg += f"\n... and {len(created_segments) - 10} more"
+                        msg += f"\n\n❌ *Failed ({fail_count}):* probably already exist or invalid parameters"
+                    else:
+                        msg += f"❌ Failed: {fail_count} (probably already exist)"
                 else:
-                    msg = f"❌ *Failed to create any segments*\n🔧 Please check parameters and try again"
+                    msg = f"❌ *Failed to create any segments ({total_segments} total)*\n🔧 Possible reasons:\n• Segments already exist\n• Invalid app ID\n• Server errors"
                 
                 client.chat_postEphemeral(
                     channel=channel_id,

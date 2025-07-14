@@ -112,57 +112,71 @@ def create_segment(
     """
     print(f"🎯 Creating segment: {name}, type: {seg_type}, value: {value}")
     
-    # 1) GET /segments/new  → CSRF
-    r = SESSION.get(f"{BASE}/segments/new", timeout=10)
-    r.raise_for_status()
-    csrf = _find_csrf(r.text)
-    if not csrf:
-        raise RuntimeError("CSRF token не найден на /segments/new")
+    try:
+        # 1) GET /segments/new  → CSRF (fresh token for each request)
+        r = SESSION.get(f"{BASE}/segments/new", timeout=10)
+        r.raise_for_status()
+        csrf = _find_csrf(r.text)
+        if not csrf:
+            print("❌ CSRF token not found")
+            return False
 
-    # 2) Подготовка options в зависимости от типа сегмента
-    if seg_type == "RetainedAtLeast":
-        # Для RetainedAtLeast используем "age" (количество дней)
-        options = {
-            "age": str(int(value)),
-            "app": app,
-            "flavor": "uid",
-            "country": country,
+        # 2) Подготовка options в зависимости от типа сегмента
+        if seg_type == "RetainedAtLeast":
+            # Для RetainedAtLeast используем "age" (количество дней)
+            options = {
+                "age": str(int(value)),
+                "app": app,
+                "flavor": "uid",
+                "country": country,
+            }
+        else:  # ActiveUsers
+            # Для ActiveUsers используем "audience" (соотношение)
+            options = {
+                "app": app,
+                "flavor": "uid", 
+                "country": country,
+                "audience": f"{value:.2f}",
+            }
+        
+        print(f"🔧 Options: {options}")
+
+        # 3) payload
+        payload = {
+            "csrf_token": csrf,
+            "name": name,
+            "title": title,
+            "type": seg_type,
+            "options": json.dumps(options),
         }
-    else:  # ActiveUsers
-        # Для ActiveUsers используем "audience" (соотношение)
-        options = {
-            "app": app,
-            "flavor": "uid", 
-            "country": country,
-            "audience": f"{value:.2f}",
-        }
-    
-    print(f"🔧 Options: {options}")
+        
+        print(f"📤 Payload: {payload}")
 
-    # 3) payload
-    payload = {
-        "csrf_token": csrf,
-        "name": name,
-        "title": title,
-        "type": seg_type,
-        "options": json.dumps(options),
-    }
-    
-    print(f"📤 Payload: {payload}")
-
-    # 4) POST /segments/
-    res = SESSION.post(
-        f"{BASE}/segments/",
-        data=payload,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        allow_redirects=False,
-        timeout=15,
-    )
-    
-    success = res.status_code == 302
-    print(f"📊 Response status: {res.status_code}, success: {success}")
-    
-    if not success:
-        print(f"❌ Response text: {res.text[:500]}...")
-    
-    return success
+        # 4) POST /segments/
+        res = SESSION.post(
+            f"{BASE}/segments/",
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            allow_redirects=False,
+            timeout=15,
+        )
+        
+        success = res.status_code == 302
+        print(f"📊 Response status: {res.status_code}, success: {success}")
+        
+        if not success:
+            # Check if it's a duplicate/existing segment error
+            if res.status_code == 500:
+                response_text = res.text[:500]
+                if "already exists" in response_text.lower() or "duplicate" in response_text.lower():
+                    print(f"⚠️ Segment may already exist")
+                else:
+                    print(f"❌ Server error: {response_text}")
+            else:
+                print(f"❌ Response ({res.status_code}): {res.text[:500]}...")
+        
+        return success
+        
+    except Exception as e:
+        print(f"❌ Exception in create_segment: {e}")
+        return False
