@@ -55,18 +55,6 @@ SEGMENT_TYPES = [
     {"text": {"type": "plain_text", "text": "👥 Active Users 95%"}, "value": "ActiveUsers_0.95"}
 ]
 
-# Value options for single segment creation
-ACTIVE_USERS_VALUES = [
-    {"text": {"type": "plain_text", "text": "80% (0.80)"}, "value": "0.80"},
-    {"text": {"type": "plain_text", "text": "95% (0.95)"}, "value": "0.95"}
-]
-
-RETAINED_VALUES = [
-    {"text": {"type": "plain_text", "text": "1 day"}, "value": "1"},
-    {"text": {"type": "plain_text", "text": "7 days"}, "value": "7"},
-    {"text": {"type": "plain_text", "text": "30 days"}, "value": "30"}
-]
-
 # Simple auth
 auth_logged_in = False
 processed_events = set()  # Prevent duplicate processing
@@ -144,21 +132,16 @@ def handle_appgrowth_command(ack, respond, command, say):
                 "blocks": [
                     {
                         "type": "section",
-                        "text": {"type": "mrkdwn", "text": "*🎯 AppGrowth Bot*\n\nCreate segments:"}
+                        "text": {"type": "mrkdwn", "text": "*🎯 AppGrowth Bot*\n\nCreate segments for your apps:"}
                     },
                     {
                         "type": "actions", 
                         "elements": [
                             {
                                 "type": "button", 
-                                "text": {"type": "plain_text", "text": "➕ New Segment"}, 
-                                "action_id": "new_segment_btn",
+                                "text": {"type": "plain_text", "text": "📊 Create Segments"}, 
+                                "action_id": "create_segments_btn",
                                 "style": "primary"
-                            },
-                            {
-                                "type": "button", 
-                                "text": {"type": "plain_text", "text": "📊 Multiple Segments"}, 
-                                "action_id": "multiple_segments_btn"
                             }
                         ]
                     }
@@ -354,129 +337,18 @@ def handle_multiple_segments_button(ack, body, client):
         logger.info("✅ Multiple modal opened")
         
     except Exception as e:
-        logger.error(f"❌ Multiple modal error: {e}")
+        logger.error(f"❌ Create segments modal error: {e}")
 
-# Modal submission handlers
-@bolt_app.view("create_segment_modal")
-def handle_segment_modal(ack, body, client):
-    logger.info("🔥 Segment modal submission")
-    
-    try:
-        values = body["view"]["state"]["values"]
-        
-        # Extract values safely
-        title = values.get("title_block", {}).get("title_input", {}).get("value", "").strip()
-        country_data = values.get("country_block", {}).get("country_input", {})
-        country = country_data.get("selected_option", {}).get("value", "")
-        seg_type_data = values.get("type_block", {}).get("type_select", {})
-        seg_type = seg_type_data.get("selected_option", {}).get("value", "")
-        value_data = values.get("value_block", {}).get("value_select", {})
-        raw_val = value_data.get("selected_option", {}).get("value", "")
-        
-        logger.info(f"📱 Modal data: title='{title}', country='{country}', type='{seg_type}', value='{raw_val}'")
-        
-        # Validation - simplified since values come from select
-        errors = {}
-        if not title:
-            errors["title_block"] = "Required"
-        if not country:
-            errors["country_block"] = "Required"
-        if not seg_type:
-            errors["type_block"] = "Required"
-        if not raw_val:
-            errors["value_block"] = "Required"
-        
-        if errors:
-            logger.warning(f"❌ Validation errors: {errors}")
-            ack(response_action="errors", errors=errors)
-            return
-        
-        # Success
-        ack()
-        logger.info("✅ Modal validated")
-        
-        # Get metadata
-        channel_id = body["view"]["private_metadata"]
-        user_id = body["user"]["id"]
-        
-        # Send immediate response
-        try:
-            client.chat_postEphemeral(
-                channel=channel_id,
-                user=user_id,
-                text="🔄 Creating segment..."
-            )
-        except Exception as e:
-            logger.error(f"❌ Response error: {e}")
-        
-        # Background task
-        def create_task():
-            try:
-                logger.info("🎯 Background creation started")
-                
-                # Ensure auth
-                if not auth_logged_in:
-                    try_login()
-                
-                if not auth_logged_in:
-                    msg = "❌ Authorization failed"
-                else:
-                    # Prepare
-                    if seg_type == "RetainedAtLeast":
-                        val = int(raw_val)  # Days for retention
-                    else:
-                        val = float(raw_val)  # Ratio for active users
-                    
-                    name = generate_segment_name(title, country, seg_type, val)
-                    logger.info(f"🎯 Creating: {name}, type: {seg_type}, value: {val}")
-                    
-                    # Create segment with detailed logging
-                    try:
-                        ok = appgrowth.create_segment(
-                            name=name,
-                            title=title,
-                            app=title,
-                            country=country,
-                            value=val,
-                            seg_type=seg_type
-                        )
-                        logger.info(f"🎯 AppGrowth result: {ok}")
-                        
-                        if ok:
-                            msg = f"✅ Created: `{name}`"
-                        else:
-                            msg = f"❌ Failed to create `{name}`"
-                            
-                    except Exception as e:
-                        logger.error(f"❌ AppGrowth exception: {e}")
-                        msg = f"❌ Error: {e}"
-                
-                # Send result
-                try:
-                    client.chat_postEphemeral(
-                        channel=channel_id,
-                        user=user_id,
-                        text=msg
-                    )
-                    logger.info(f"✅ Result sent: {msg[:50]}...")
-                except Exception as e:
-                    logger.error(f"❌ Failed to send result: {e}")
-                
-            except Exception as e:
-                logger.error(f"❌ Task error: {e}")
-        
-        # Start background
-        thread = threading.Thread(target=create_task, daemon=True)
-        thread.start()
-        logger.info("🚀 Background thread started")
-        
-    except Exception as e:
-        logger.error(f"❌ Modal handler error: {e}")
-        ack()
+# Handle form inputs (to prevent warnings)
+@bolt_app.action(re.compile("app_id_input|countries_input|segment_types_input"))
+def handle_form_inputs(ack, body):
+    ack()
+    # Just acknowledge, no special handling needed
 
-@bolt_app.view("create_multiple_segments_modal")
-def handle_multiple_segments_modal(ack, body, client):
-    logger.info("🔥 Multiple segments modal")
+# Modal submission handler
+@bolt_app.view("create_segments_modal")
+def handle_create_segments_modal(ack, body, client):
+    logger.info("🔥 Create segments modal submission")
     
     try:
         values = body["view"]["state"]["values"]
@@ -487,7 +359,7 @@ def handle_multiple_segments_modal(ack, body, client):
         segment_types_data = values.get("segment_types_block", {}).get("segment_types_input", {})
         segment_types = [opt["value"] for opt in segment_types_data.get("selected_options", [])]
         
-        logger.info(f"📱 Multiple: app='{app_id}', countries={len(countries)}, types={len(segment_types)}")
+        logger.info(f"📱 Create segments: app='{app_id}', countries={len(countries)}, types={len(segment_types)}")
         
         # Validation
         errors = {}
@@ -514,7 +386,7 @@ def handle_multiple_segments_modal(ack, body, client):
             text=f"🔄 Creating {total} segments..."
         )
         
-        def multiple_task():
+        def create_segments_task():
             try:
                 if not auth_logged_in:
                     try_login()
@@ -537,7 +409,7 @@ def handle_multiple_segments_modal(ack, body, client):
                             else:
                                 val = float(value)  # Ratio
                             
-                            logger.info(f"🎯 Multiple creating: {name}")
+                            logger.info(f"🎯 Creating: {name}")
                             
                             ok = appgrowth.create_segment(
                                 name=name,
@@ -550,25 +422,25 @@ def handle_multiple_segments_modal(ack, body, client):
                             
                             if ok:
                                 created += 1
-                                logger.info(f"✅ Multiple success: {name}")
+                                logger.info(f"✅ Created: {name}")
                             else:
                                 failed += 1
-                                logger.error(f"❌ Multiple failed: {name}")
+                                logger.error(f"❌ Failed: {name}")
                                 
                         except Exception as e:
                             failed += 1
-                            logger.error(f"❌ Multiple error: {e}")
+                            logger.error(f"❌ Error: {e}")
                         
                         time.sleep(0.5)
                 
                 msg = f"✅ Done: {created} created, {failed} failed"
                 client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
-                logger.info(f"✅ Multiple completed: {msg}")
+                logger.info(f"✅ Segments creation completed: {msg}")
                 
             except Exception as e:
-                logger.error(f"❌ Multiple task error: {e}")
+                logger.error(f"❌ Create segments task error: {e}")
         
-        thread = threading.Thread(target=multiple_task, daemon=True)
+        thread = threading.Thread(target=create_segments_task, daemon=True)
         thread.start()
         
     except Exception as e:
