@@ -101,8 +101,11 @@ logger.info("✅ Bolt app initialized with process_before_response=True")
 def handle_appgrowth_command(ack, respond, command, say):
     """Ultra-simple command handler"""
     
+    logger.info(f"📨 Received command: {command}")
+    
     # Step 1: IMMEDIATELY acknowledge
     ack()
+    logger.info("✅ Command acknowledged")
     
     # Step 2: Get event ID to prevent duplicates
     event_id = f"{command.get('trigger_id', '')}{command.get('command_id', '')}"
@@ -123,9 +126,11 @@ def handle_appgrowth_command(ack, respond, command, say):
         if text.lower() == 'ping':
             auth_status = "🟢 Connected" if auth_logged_in else "🔴 Disconnected"
             respond(f"🟢 pong! AppGrowth: {auth_status}")
+            logger.info("✅ Ping response sent")
             return
         
         if not text:  # Main menu
+            logger.info("📋 Sending main menu")
             respond({
                 "response_type": "ephemeral",
                 "text": "🎯 AppGrowth Bot",
@@ -147,6 +152,7 @@ def handle_appgrowth_command(ack, respond, command, say):
                     }
                 ]
             })
+            logger.info("✅ Main menu sent")
             return
         
         # Unknown command
@@ -154,6 +160,7 @@ def handle_appgrowth_command(ack, respond, command, say):
             "response_type": "ephemeral",
             "text": f"Unknown: `{text}`. Use `/appgrowth` or `/appgrowth ping`"
         })
+        logger.info("✅ Unknown command response sent")
         
     except Exception as e:
         logger.error(f"❌ Command error: {e}")
@@ -447,22 +454,54 @@ def handle_create_segments_modal(ack, body, client):
         logger.error(f"❌ Multiple modal error: {e}")
         ack()
 
-# Flask setup
+# Flask app setup
+logger.info("🌐 Setting up Flask app...")
 flask_app = Flask(__name__)
 handler = SlackRequestHandler(bolt_app)
 
 @flask_app.route("/", methods=["GET"])
 def home():
-    return {"status": "running", "auth": auth_logged_in, "time": time.time()}
+    return {"status": "AppGrowth Bot is running", "auth": auth_logged_in, "time": time.time()}
 
 @flask_app.route("/slack/events", methods=["POST"])
 def slack_events():
     logger.info("📨 Slack event received")
-    return handler.handle(request)
+    try:
+        return handler.handle(request)
+    except Exception as e:
+        logger.error(f"❌ Event handling error: {e}")
+        return {"error": str(e)}, 500
+
+# Additional routes for debugging
+@flask_app.route("/slack/interactive", methods=["POST"])
+def slack_interactive():
+    logger.info("📨 Slack interactive event received")
+    try:
+        return handler.handle(request)
+    except Exception as e:
+        logger.error(f"❌ Interactive handling error: {e}")
+        return {"error": str(e)}, 500
+
+@flask_app.route("/slack/commands", methods=["POST"])
+def slack_commands():
+    logger.info("📨 Slack command received")
+    try:
+        return handler.handle(request)
+    except Exception as e:
+        logger.error(f"❌ Command handling error: {e}")
+        return {"error": str(e)}, 500
 
 @flask_app.route("/health", methods=["GET"])
 def health():
     return {"status": "ok", "auth": auth_logged_in}
+
+# Catch-all route for debugging
+@flask_app.route("/<path:path>", methods=["GET", "POST"])
+def catch_all(path):
+    logger.warning(f"🔍 Unhandled request to /{path}")
+    logger.warning(f"🔍 Method: {request.method}")
+    logger.warning(f"🔍 Headers: {dict(request.headers)}")
+    return {"error": f"Path /{path} not found", "method": request.method}, 404
 
 # Background login
 def background_login():
