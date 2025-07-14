@@ -248,14 +248,6 @@ def open_multiple_segments_modal(ack, body, client):
                         },
                         "label": {"type": "plain_text", "text": "📊 Segment Types"},
                         "hint": {"type": "plain_text", "text": "Select multiple segment types to create"}
-                    },
-                    {
-                        "type": "section",
-                        "block_id": "multiple_preview_block",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": "*📋 Preview:*\nSelect options above to see segments that will be created..."
-                        }
                     }
                 ]
             }
@@ -264,67 +256,11 @@ def open_multiple_segments_modal(ack, body, client):
     except Exception as e:
         logger.error(f"❌ Error opening multiple segments modal: {e}")
 
-# Field changes for preview
+# Handle form inputs to prevent warnings
 @bolt_app.action(re.compile("app_id_input|countries_input|segment_types_input"))
-def handle_field_changes(ack, body, client):
+def handle_form_inputs(ack, body):
     ack()
-    
-    try:
-        view_id = body["view"]["id"]
-        values = body["view"]["state"]["values"]
-        
-        # Multiple segments
-        app_id = ""
-        countries = []
-        segment_types = []
-        
-        if "app_id_block" in values and values["app_id_block"]["app_id_input"]["value"]:
-            app_id = values["app_id_block"]["app_id_input"]["value"]
-        
-        if "countries_block" in values and values["countries_block"]["countries_input"]["selected_options"]:
-            countries = [opt["value"] for opt in values["countries_block"]["countries_input"]["selected_options"]]
-            
-        if "segment_types_block" in values and values["segment_types_block"]["segment_types_input"]["selected_options"]:
-            segment_types = [opt["value"] for opt in values["segment_types_block"]["segment_types_input"]["selected_options"]]
-        
-        logger.info(f"🔍 Preview update: app='{app_id}', countries={len(countries)}, types={len(segment_types)}")
-        
-        if app_id and countries and segment_types:
-            preview_lines = ["*📋 Segments to be created:*"]
-            count = 0
-            
-            for country in countries[:3]:
-                for seg_type_value in segment_types[:3]:
-                    seg_type, value = seg_type_value.split("_")
-                    preview_name = generate_segment_name(app_id, country, seg_type, value)
-                    preview_lines.append(f"• `{preview_name}`")
-                    count += 1
-                    if count >= 6:
-                        break
-                if count >= 6:
-                    break
-            
-            total_segments = len(countries) * len(segment_types)
-            if total_segments > 6:
-                preview_lines.append(f"... *and {total_segments - 6} more segments*")
-            
-            preview_lines.append(f"\n*Total: {total_segments} segments*")
-            preview_text = "\n".join(preview_lines)
-        else:
-            preview_text = "*📋 Preview:*\nSelect options above to see segments that will be created..."
-        
-        updated_view = body["view"]
-        # Fixed: блок preview имеет индекс 5, а не 4
-        updated_view["blocks"][5]["text"]["text"] = preview_text
-        
-        client.views_update(
-            view_id=view_id,
-            view=updated_view
-        )
-        logger.info("✅ Preview updated successfully")
-        
-    except Exception as e:
-        logger.error(f"❌ Error updating preview: {e}")
+    # Just acknowledge, no preview needed
 
 # Multiple segments submission handler
 @bolt_app.view("create_multiple_segments_modal")
