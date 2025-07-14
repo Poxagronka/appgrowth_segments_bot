@@ -1,4 +1,4 @@
-# app.py — Slack bot for AppGrowth (Fixed version)
+# app.py — Slack bot for AppGrowth (Fixed timeout version)
 import os
 import re
 import logging
@@ -55,7 +55,7 @@ SEGMENT_TYPES = [
 ]
 
 # Global auth status
-AUTH_STATUS = {"logged_in": False, "in_progress": False}
+AUTH_STATUS = {"logged_in": False, "in_progress": False, "last_attempt": 0}
 
 # Bolt app initialization
 bolt_app = App(
@@ -64,42 +64,50 @@ bolt_app = App(
     logger=logger,
 )
 
-def lazy_login():
-    """Lazy AppGrowth authorization"""
+def get_auth_status_text():
+    """Get current auth status as text without blocking"""
     if AUTH_STATUS["logged_in"]:
-        return True
-    
-    if AUTH_STATUS["in_progress"]:
-        for _ in range(20):
-            time.sleep(0.5)
-            if AUTH_STATUS["logged_in"]:
-                return True
-        return False
-    
-    AUTH_STATUS["in_progress"] = True
-    try:
-        logger.info("🔐 Performing AppGrowth authorization...")
-        success = appgrowth.login()
-        AUTH_STATUS["logged_in"] = success
-        if success:
-            logger.info("✅ AppGrowth authorization successful")
-        else:
-            logger.error("❌ Failed to authorize with AppGrowth")
-        return success
-    except Exception as e:
-        logger.error(f"❌ AppGrowth authorization error: {e}")
-        return False
-    finally:
-        AUTH_STATUS["in_progress"] = False
+        return "🟢 Connected"
+    elif AUTH_STATUS["in_progress"]:
+        return "🔄 Connecting..."
+    else:
+        return "🔴 Disconnected"
 
-def async_login():
-    """Async authorization on startup"""
+def ensure_auth_async():
+    """Ensure auth is running in background without blocking"""
+    if AUTH_STATUS["logged_in"] or AUTH_STATUS["in_progress"]:
+        return
+    
+    # Don't retry too often
+    if time.time() - AUTH_STATUS["last_attempt"] < 30:
+        return
+    
     def login_thread():
-        lazy_login()
+        AUTH_STATUS["in_progress"] = True
+        AUTH_STATUS["last_attempt"] = time.time()
+        try:
+            logger.info("🔐 Starting AppGrowth authorization...")
+            success = appgrowth.login()
+            AUTH_STATUS["logged_in"] = success
+            if success:
+                logger.info("✅ AppGrowth authorization successful")
+            else:
+                logger.error("❌ Failed to authorize with AppGrowth")
+        except Exception as e:
+            logger.error(f"❌ AppGrowth authorization error: {e}")
+        finally:
+            AUTH_STATUS["in_progress"] = False
     
     thread = threading.Thread(target=login_thread, daemon=True)
     thread.start()
     logger.info("🚀 Background AppGrowth authorization started...")
+
+def wait_for_auth(max_wait=10):
+    """Wait for auth completion with timeout"""
+    start_time = time.time()
+    while AUTH_STATUS["in_progress"] and (time.time() - start_time) < max_wait:
+        time.sleep(0.5)
+    return AUTH_STATUS["logged_in"]
 
 def generate_segment_name(app_id, country, seg_type, value):
     """Generate segment name with proper formatting"""
@@ -113,16 +121,20 @@ def generate_segment_name(app_id, country, seg_type, value):
     country = country.upper()
     return f"bloom_{app_id}_{country}_{code}".lower()
 
-# Start background auth
-async_login()
+# Start background auth on startup
+ensure_auth_async()
 
 @bolt_app.command("/appgrowth")
 def handle_appgrowth(ack, respond, command):
+    # КРИТИЧНО: сначала ACK, потом всё остальное
     ack()
     
     logger.info("🎯 Processing /appgrowth command")
     
     text = command.get("text", "").strip()
+    
+    # Запускаем авторизацию в фоне если нужно (не блокируем)
+    ensure_auth_async()
     
     if not text:
         logger.info("📋 Showing main menu")
@@ -166,7 +178,7 @@ def handle_appgrowth(ack, respond, command):
         return
     
     if text.lower() == 'ping':
-        auth_status = "🟢 Connected" if AUTH_STATUS["logged_in"] else "🔄 Connecting..." if AUTH_STATUS["in_progress"] else "🔴 Disconnected"
+        auth_status = get_auth_status_text()
         logger.info(f"📊 Ping command - auth status: {auth_status}")
         respond(
             blocks=[
@@ -608,7 +620,8 @@ def handle_segment_submission(ack, body, client):
             try:
                 logger.info("🎯 Starting segment creation")
                 
-                if not lazy_login():
+                # Wait for auth if needed
+                if not wait_for_auth():
                     msg = "❌ *AppGrowth authorization error*\n🔧 Please try again later or contact administrator"
                 else:
                     if seg_type == "RetainedAtLeast":
@@ -735,7 +748,7 @@ def handle_multiple_segments_submission(ack, body, client):
             try:
                 logger.info(f"🎯 Starting creation of {total_segments} segments")
                 
-                if not lazy_login():
+                if not wait_for_auth():
                     msg = "❌ *AppGrowth authorization error*\n🔧 Please try again later"
                     client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
                     return
