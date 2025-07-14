@@ -105,7 +105,7 @@ def async_login():
 def generate_segment_name(app_id, country, seg_type, value):
     """Generate segment name with proper formatting"""
     if seg_type == "RetainedAtLeast":
-        code = str(int(value))
+        code = str(int(value)) + "d"  # Add 'd' for days: 30d, 7d, 1d
     else:  # ActiveUsers
         # Convert 0.8 to "80", 0.95 to "95", etc.
         if isinstance(value, str):
