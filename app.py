@@ -116,7 +116,6 @@ def generate_segment_name(app_id, country, seg_type, value):
 # Start background auth
 async_login()
 
-# Main command handler
 @bolt_app.command("/appgrowth")
 def handle_appgrowth(ack, respond, command):
     ack()
@@ -127,73 +126,88 @@ def handle_appgrowth(ack, respond, command):
     
     if not text:
         logger.info("📋 Showing main menu")
-        respond(
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn", 
-                        "text": "*🎯 Welcome to AppGrowth Bot!*\n\nUse the bot to create segments in AppGrowth:\n• Quick creation through convenient forms\n• Automatic segment name generation\n• Parameter validation"
+        try:
+            respond(
+                response_type="in_channel",  # Make it visible to everyone
+                blocks=[
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn", 
+                            "text": "*🎯 Welcome to AppGrowth Bot!*\n\nUse the bot to create segments in AppGrowth:\n• Quick creation through convenient forms\n• Automatic segment name generation\n• Parameter validation"
+                        }
+                    },
+                    {
+                        "type": "actions", 
+                        "elements": [
+                            {
+                                "type": "button", 
+                                "text": {"type": "plain_text", "text": "➕ New Segment"}, 
+                                "action_id": "new_segment_btn",
+                                "style": "primary"
+                            },
+                            {
+                                "type": "button", 
+                                "text": {"type": "plain_text", "text": "📊 Multiple Segments"}, 
+                                "action_id": "multiple_segments_btn",
+                                "style": "secondary"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "context",
+                        "elements": [
+                            {
+                                "type": "mrkdwn",
+                                "text": "💡 *Tip:* Use `/appgrowth ping` to check bot status"
+                            }
+                        ]
                     }
-                },
-                {
-                    "type": "actions", 
-                    "elements": [
-                        {
-                            "type": "button", 
-                            "text": {"type": "plain_text", "text": "➕ New Segment"}, 
-                            "action_id": "new_segment_btn",
-                            "style": "primary"
-                        },
-                        {
-                            "type": "button", 
-                            "text": {"type": "plain_text", "text": "📊 Multiple Segments"}, 
-                            "action_id": "multiple_segments_btn",
-                            "style": "secondary"
-                        }
-                    ]
-                },
-                {
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": "💡 *Tip:* Use `/appgrowth ping` to check bot status"
-                        }
-                    ]
-                }
-            ]
-        )
+                ]
+            )
+            logger.info("✅ Main menu response sent successfully")
+        except Exception as e:
+            logger.error(f"❌ Error sending main menu: {e}")
         return
     
     if text.lower() == 'ping':
         auth_status = "🟢 Connected" if AUTH_STATUS["logged_in"] else "🔄 Connecting..." if AUTH_STATUS["in_progress"] else "🔴 Disconnected"
         logger.info(f"📊 Ping command - auth status: {auth_status}")
+        try:
+            respond(
+                response_type="ephemeral",
+                blocks=[
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"🟢 *pong!* Bot is working fine ✨\n\n📊 AppGrowth Status: {auth_status}"
+                        }
+                    }
+                ]
+            )
+            logger.info("✅ Ping response sent successfully")
+        except Exception as e:
+            logger.error(f"❌ Error sending ping response: {e}")
+        return
+    
+    # For any other commands
+    try:
         respond(
+            response_type="ephemeral",
             blocks=[
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"🟢 *pong!* Bot is working fine ✨\n\n📊 AppGrowth Status: {auth_status}"
+                        "text": f"🤖 Unknown command: `{text}`\n\nUse:\n• `/appgrowth` - main menu\n• `/appgrowth ping` - status check"
                     }
                 }
             ]
         )
-        return
-    
-    # For any other commands
-    respond(
-        blocks=[
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"🤖 Unknown command: `{text}`\n\nUse:\n• `/appgrowth` - main menu\n• `/appgrowth ping` - status check"
-                }
-            }
-        ]
-    )
+        logger.info(f"✅ Unknown command response sent: {text}")
+    except Exception as e:
+        logger.error(f"❌ Error sending unknown command response: {e}")
 
 # Single segment creation button handler
 @bolt_app.action("new_segment_btn")
