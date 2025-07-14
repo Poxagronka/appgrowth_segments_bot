@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8" />
+    <title>Segments - Appgrowth</title>
+    <meta name="viewport" content="width=device-width, initial-scale=0.1">
+    <meta content="Appgrowth DSP" name="description" />
+    <meta content="appgrowth.com" name="author" />
+    <!-- App favicon -->
+    <link rel="shortcut icon" href="/static/images/favicon.ico">
+
+    <!-- Quill css -->
+    <link href="/static/css/vendor/quill.bubble.css" rel="stylesheet" type="text/css" />
+    <link href="/static/css/vendor/quill.core.css" rel="stylesheet" type="text/css" />
+    <link href="/static/css/vendor/quill.snow.css" rel="stylesheet" type="text/css" />
+
+    <!-- App css -->
+    <link href="/static/css/icons.css" rel="stylesheet" type="text/css" />
+    <link href="/static/css/bootstrap-icons.css" rel="stylesheet" />
+    <link href="/static/css/app.css" rel="stylesheet" type="text/css" id="light-style" />
+    <link href="/static/css/app-dark.css" rel="stylesheet" type="text/css" id="dark-style" />
+
+    <!-- DataTable css -->
+    <link href="/static/css/vendor/dataTables.bootstrap5.css" rel="stylesheet" type="text/css" id="light-style" />
+    <link href="/static/css/vendor/dataTables.checkboxes.css" rel="stylesheet" type="text/css" id="light-style" />
+    <link href="/static/css/vendor/responsive.bootstrap5.css" rel="stylesheet" type="text/css" id="dark-style" />
+    <link href="/static/css/vendor/buttons.bootstrap5.css" rel="stylesheet" type="text/css" id="dark-style" />
+
+    <link href="/static/css/vendor/daterangepicker.css" rel="stylesheet" type="text/css" id="dark-style" />
+
+    <link href="/static/css/base.css" rel="stylesheet" type="text/css" />
+
+    <style>
+      input::-webkit-outer-spin-button,
+      input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      /* Firefox */
+      input[type=number] {
+        -moz-appearance: textfield;
+      }
+      .dataTable td, .dataTable th{
+        background-color: white;
+      }
+
+      div.side-nav-block {
+        border-top:solid white 2px;
+      }
+    </style>
+
+  
+  
+  </head>
+
+  <body class="loading" data-layout-config='{"leftSideBarTheme":"dark","layoutBoxed":false, "leftSidebarCondensed":true, "leftSidebarScrollable":false,"darkMode":false, "showRightSidebarOnStart": false}'>
+    <!-- Begin page -->
+    <div id='app' class="wrapper">
+      <!-- ========== Left Sidebar Start ========== -->
+      <div class="leftside-menu">
+
+        <div class="h-100" id="leftside-menu-container" data-simplebar>
+
+          <!--- Sidemenu -->
+          <ul class="side-nav">
+
+            <li class="side-nav-title side-nav-item">Navigation</li>
+
+            
+
+            
+            <li class="side-nav-item">
+              <a href="/bi2/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                <i class="uil-table"></i>
+                <span> BI </span>
+              </a>
+            </li>
+            
+
+            
+            <li class="side-nav-item">
+              <a href="/campaigns/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                <i class="dripicons-volume-full"></i>
+                <span> Campaigns </span>
+              </a>
+            </li>
+            
+
+            
+            <li class="side-nav-item">
+              <a href="/creatives/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                <i class="dripicons-photo "></i>
+                <span> Creatives </span>
+              </a>
+            </li>
+            
+
+            
+            <li class="side-nav-item">
+              <a href="/tags/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                <i class="dripicons-disc"></i>
+                <span> Tags </span>
+              </a>
+            </li>
+            
+
+            
+            <li class="side-nav-item">
+              <a href="/store_assets/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                <i class="uil-book"></i>
+                <span> Store assets </span>
+              </a>
+            </li>
+            
+
+            
+            <li class="side-nav-item">
+              <a href="/segments/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                <i class="dripicons-graph-pie"></i>
+                <span> Segments </span>
+              </a>
+            </li>
+            
+
+            <li class="side-nav-item">
+              <a href="/playbook_configs/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                <i class="dripicons-wallet"></i>
+                <span> Playbook Config </span>
+              </a>
+            </li>
+          </ul>
+
+          <div class="side-nav-block">
+            <ul class="side-nav">
+              <li class="side-nav-title side-nav-item">Tools</li>
+
+              
+              <li class="side-nav-item">
+                <a href="/presets/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-briefcase"></i>
+                  <span> Presets </span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href="/campaign_debug/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-experiment"></i>
+                  <span> Campaign debug </span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href="/creative_test/new" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-photo-group"></i>
+                  <span> Creative test </span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href="/bidder/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-rocket"></i>
+                  <span> Bidder request debug </span>
+                </a>
+              </li>
+              <li class="side-nav-item">
+                <a href="/bidder_config/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-checklist"></i>
+                  <span>Bidder config</span>
+                </a>
+              </li>
+              
+            </ul>
+          </div>
+
+          <div class="side-nav-block">
+            <ul class="side-nav">
+              <li class="side-nav-title side-nav-item">Inventory</li>
+
+              
+              <li class="side-nav-item">
+                <a href="/bundle_source/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-cart"></i>
+                  <span> Bundle source </span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href="/supply/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-web"></i>
+                  <span> Supply </span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href="/inventory/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-graph-line"></i>
+                  <span> Inventory - Metrics </span>
+                </a>
+              </li>
+              <li class="side-nav-item">
+                <a href="/inventory/intersections" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-media-shuffle"></i>
+                  <span> Inventory - Intersections </span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href="/devices/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-device-mobile"></i>
+                  <span> Device Info </span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href="/user_lookup/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-device-tablet"></i>
+                  <span> User Lookup </span>
+                </a>
+              </li>
+              
+            </ul>
+          </div>
+
+          <div class="side-nav-block">
+            <ul class="side-nav">
+              <li class="side-nav-title side-nav-item">Admin</li>
+
+              
+              <li class="side-nav-item">
+                <a href="/companies/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-user-group"></i>
+                  <span>Companies</span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href="/advertisers/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-user-id"></i>
+                  <span>Advertisers</span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href="/users/" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-user"></i>
+                  <span>Users</span>
+                </a>
+              </li>
+              
+
+              
+              <li class="side-nav-item">
+                <a href='/invoice/' aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                  <i class="dripicons-jewel"></i>
+                  <span>Invoices</span>
+                </a>
+              </li>
+              
+            </ul>
+          </div>
+
+          <div class="border"></div>
+
+          
+
+          <ul class="side-nav">
+            <li class="side-nav-item">
+              <a href="/auth/logout" aria-expanded="false" aria-controls="sidebarDashboards" class="side-nav-link">
+                <i class="dripicons-exit"></i>
+                <span>  Logout  </span>
+              </a>
+            </li>
+          </ul>
+
+          <div class="clearfix"></div>
+
+        </div>
+        <!-- Sidebar -left -->
+
+      </div>
+      <!-- Left Sidebar End -->
+
+      <!-- ============================================================== -->
+      <!-- Start Page Content here -->
+      <!-- ============================================================== -->
+
+      <div class="content-page">
+        <div class="content">
+          <!-- Topbar Start -->
+          <div class="navbar-custom">
+            <button class="button-menu-mobile open-left">
+              <i class="mdi mdi-menu"></i>
+            </button>
+          </div>
+          <!-- end Topbar -->
+
+          <!-- Start Content-->
+          <div class="container-fluid">
+						
+							
+						
+
+            
+  <div class='row'>
+    <div class='col-12'>
+      <h4 class='page-title'>Segments</h4>
+    </div>
+  </div>
+
+  <div class='row'>
+    <div class='col-12'>
+      <div class='card'>
+        <div class='card-body'>
+          <div class="d-flex justify-content-end">
+            <a class='btn btn-primary' href='/segments/new'>New</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class='row'>
+    <div class='col-12'>
+      <div class='card'>
+        <div class='card-body'>
+
+          <table id="segments-table" class="table w-100 nowrap">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Options</th>
+                <th>Size</th>
+                <th>File size</th>
+                <th>Created</th>
+                <th>Updated</th>
+                <th>Active campaigns</th>
+                <th>Installs</th>
+                <th>Profit</th>
+                <th>Profit/Mb</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>14220</td>
+                  <td><a href="/segments/14220" title="Show">1523297725_iOS_CPA(131)_abdoul_V4_100k</a></td>
+                  <td>1523297725_iOS_CPA(131)_abdoul_V4_100k</td>
+                  <td>AbdoulSegment</td>
+                  <td>
+                    
+                      fpr: 0.00005<br>
+                    
+                      tag: 1523297725_iOS<br>
+                    
+                      limit: 100000<br>
+                    
+                      flavor: bmid<br>
+                    
+                      country: USA<br>
+                    
+                      goal_id: 131<br>
+                    
+                      permanent: 1<br>
+                    
+                      model_path: auto_segments/models/1523297725_iOS_131_cg1_v4.pkl<br>
+                    
+                      custom_table_name: is_segments_1523297725_iOS_131_cg1_v4_USA_auto<br>
+                    
+                  </td>
+                  <td class="column-number">0</td>
+                  <td class="column-number">0</td>
+                  <td>2025-03-28 12:02:56</td>
+                  <td>2025-03-28 12:02:56</td>
+                  <td class="column-number">
+                    
+                  </td>
+                  <td class="column-number">0</td>
+                  <td class="column-money">$0.00</td>
+                  <td class="column-money">$0.00</td>
+                  <td class="table-action">
+                    <a href="/segments/14220/rebuild" role="link-to" data-confirm="Please confirm if you want to rebuild segment 14220" rel="no-follow" data-method="post" title="Rebuild"><i class="dripicons-clockwise"></i></a>
+                    <a href="/segments/14220/edit" title="Edit"><i class="dripicons-document-edit"></i></a>
+                    <a href="/segments/14220" role="link-to" data-confirm="Please confirm if you want to delete segment 14220" rel="no-follow" data-method="delete" title="Delete"><i class="dripicons-trash"></i></a>
+                  </td>
+                </tr>
+              
+                <tr>
+                  <td>14221</td>
+                  <td><a href="/segments/14221" title="Show">1523297725_iOS_CPA(131)_abdoul_V4_500k</a></td>
+                  <td>1523297725_iOS_CPA(131)_abdoul_V4_500k</td>
+                  <td>AbdoulSegment</td>
+                  <td>
+                    
+                      fpr: 0.00005<br>
+                    
+                      tag: 1523297725_iOS<br>
+                    
+                      limit: 500000<br>
+                    
+                      flavor: bmid<br>
+                    
+                      country: USA<br>
+                    
+                      goal_id: 131<br>
+                    
+                      permanent: 1<br>
+                    
+                      model_path: auto_segments/models/1523297725_iOS_131_cg1_v4.pkl<br>
+                    
+                      custom_table_name: is_segments_1523297725_iOS_131_cg1_v4_USA_auto<br>
+                    
+                  </td>
+                  <td class="column-number">0</td>
+                  <td class="column-number">0</td>
+                  <td>2025-03-28 12:02:56</td>
+                  <td>2025-03-28 12:02:56</td>
+                  <td class="column-number">
+                    
+                  </td>
+                  <td class="column-number">0</td>
+                  <td class="column-money">$0.00</td>
+                  <td class="column-money">$0.00</td>
+                  <td class="table-action">
+                    <a href="/segments/14221/rebuild" role="link-to" data-confirm="Please confirm if you want to rebuild segment 14221" rel="no-follow" data-method="post" title="Rebuild"><i class="dripicons-clockwise"></i></a>
+                    <a href="/segments/14221/edit" title="Edit"><i class="dripicons-document-edit"></i></a>
+                    <a href="/segments/14221" role="link-to" data-confirm="Please confirm if you want to delete segment 14221" rel="no-follow" data-method="delete" title="Delete"><i class="dripicons-trash"></i></a>
+                  </td>
+                </tr>
+              
+                <tr>
+                  <td>12614</td>
+                  <td><a href="/segments/12614" title="Show">1618805694_iOS_CPI(install)_abdoul_V6_MMP_Light_100k_12_01_2024</a></td>
+                  <td>1618805694_iOS_CPI(install)_abdoul_V6_MMP_Light_100k_12_01_2024</td>
+                  <td>SegmentedUsers</td>
+                  <td>
+                    
+                      fpr: 0.00001<br>
+                    
+                      flavor: uid<br>
+                    
+                      country: USA<br>
+                    
+                      segment: 1618805694_iOS_CPI(install)_abdoul_V6_MMP_Light_100k_12_01_2024<br>
+                    
+                      permanent: 1<br>
+                    
+                  </td>
+                  <td class="column-number">0</td>
+                  <td class="column-number">0</td>
+                  <td>2025-01-17 09:16:12</td>
+                  <td>2025-01-17 09:16:12</td>
+                  <td class="column-number">
+                    
+                  </td>
+                  <td class="column-number">0</td>
+                  <td class="column-money">$0.00</td>
+                  <td class="column-money">$0.00</td>
+                  <td class="table-action">
+                    <a href="/segments/12614/rebuild" role="link-to" data-confirm="Please confirm if you want to rebuild segment 12614" rel="no-follow" data-method="post" title="Rebuild"><i class="dripicons-clockwise"></i></a>
+                    <a href="/segments/12614/edit" title="Edit"><i class="dripicons-document-edit"></i></a>
+                    <a href="/segments/12614" role="link-to" data-confirm="Please confirm if you want to delete segment 12614" rel="no-follow" data-method="delete" title="Delete"><i class="dripicons-trash"></i></a>
+                  </td>
+                </tr>
+              
+                <tr>
+                  <td>11982</td>
+                  <td><a href="/segments/11982" title="Show">com.pixel.art.coloring.color.number_Android_CPA(m_mins_played_240)_abdoul_V4_2000k</a></td>
+                  <td>com.pixel.art.coloring.color.number_Android_CPA(m_mins_played_240)_abdoul_V4_2000k</td>
+                  <td>AbdoulSegment</td>
+                  <td>
+                    
+                      fpr: 0.00005<br>
+                    
+                      tag: com.pixel.art.coloring.color.number_Android<br>
+                    
+                      limit: 2000000<br>
+                    
+                      flavor: uid<br>
+                    
+                      country: USA<br>
+                    
+                      goal_id: m_mins_played_240<br>
+                    
+                      permanent: 1<br>
+                    
+                      model_path: auto_segments/models/com.pixel.art.coloring.color.number_Android_m_mins_played_240_cg1_v4.pkl<br>
+                    
+                      custom_table_name: is_segments_com_pixel_art_coloring_color_number_Android_m_mins_played_240_cg1_v4_USA_auto<br>
+                    
+                      max_install_proba: 0.976<br>
+                    
+                      min_install_proba: 0.248<br>
+                    
+                  </td>
+                  <td class="column-number">2000000</td>
+                  <td class="column-number">14913274</td>
+              
