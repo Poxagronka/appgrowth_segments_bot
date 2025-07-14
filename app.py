@@ -361,15 +361,6 @@ def handle_multiple_segments_submission(ack, body, client):
                             if ok:
                                 created_segments.append(name)
                                 logger.info(f"✅ Created: {name}")
-                                # Send immediate success notification
-                                try:
-                                    client.chat_postEphemeral(
-                                        channel=channel_id,
-                                        user=user_id,
-                                        text=f"✅ Created: `{name}`"
-                                    )
-                                except:
-                                    pass
                             else:
                                 failed_segments.append(name)
                                 logger.error(f"❌ Failed: {name} (probably already exists or server error)")
