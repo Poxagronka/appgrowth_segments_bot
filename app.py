@@ -1,4 +1,4 @@
-# app.py — Slack-бот для работы с AppGrowth (оптимизированная версия без таймаутов)
+# app.py — Slack-бот для работы с AppGrowth (полная исправленная версия)
 import os
 import re
 import logging
@@ -186,15 +186,45 @@ def handle_appgrowth(ack, respond, command):
         ]
     )
 
-# Обработчик кнопки «Новый сегмент» — БЫСТРЫЙ ОТВЕТ
+# Обработчик кнопки «Новый сегмент» — ИСПРАВЛЕННАЯ ВЕРСИЯ
 @bolt_app.action("new_segment_btn")
 def open_segment_modal(ack, body, client):
     # МГНОВЕННО отвечаем Slack'у
     ack()
     
     logger.info("🎯 Открытие модалки создания сегмента")
+    logger.info(f"📊 Body structure: {list(body.keys())}")
     
     try:
+        # Правильно извлекаем channel_id из разных источников
+        channel_id = None
+        
+        # Вариант 1: прямо в body
+        if "channel_id" in body:
+            channel_id = body["channel_id"]
+            logger.info(f"📍 Channel ID из body: {channel_id}")
+        
+        # Вариант 2: в channel объекте
+        elif "channel" in body and "id" in body["channel"]:
+            channel_id = body["channel"]["id"]
+            logger.info(f"📍 Channel ID из body.channel: {channel_id}")
+        
+        # Вариант 3: в container
+        elif "container" in body and "channel_id" in body["container"]:
+            channel_id = body["container"]["channel_id"]
+            logger.info(f"📍 Channel ID из container: {channel_id}")
+        
+        # Вариант 4: в response_url (последний способ)
+        elif "response_url" in body:
+            # Берем любой доступный ID для метаданных
+            channel_id = body.get("user", {}).get("id", "unknown")
+            logger.info(f"📍 Используем user ID как fallback: {channel_id}")
+        
+        if not channel_id:
+            logger.error("❌ Не удалось найти channel_id")
+            logger.info(f"🔍 Полная структура body: {body}")
+            return
+        
         trigger_id = body["trigger_id"]
         client.views_open(
             trigger_id=trigger_id,
@@ -204,7 +234,7 @@ def open_segment_modal(ack, body, client):
                 "title": {"type": "plain_text", "text": "🎯 Новый сегмент"},
                 "submit": {"type": "plain_text", "text": "Создать"},
                 "close": {"type": "plain_text", "text": "Отмена"},
-                "private_metadata": body["channel_id"],
+                "private_metadata": channel_id,  # Используем найденный channel_id
                 "blocks": [
                     {
                         "type": "section",
@@ -283,6 +313,7 @@ def open_segment_modal(ack, body, client):
         logger.info("✅ Модалка успешно открыта")
     except Exception as e:
         logger.error(f"❌ Ошибка при открытии модалки: {e}")
+        logger.error(f"📊 Body для отладки: {body}")
 
 # Обработчик автокомплита для App ID
 @bolt_app.options("title_input")
@@ -395,131 +426,166 @@ def handle_field_changes(ack, body, client):
     except Exception as e:
         logger.warning(f"Error updating preview: {e}")
 
-# Обработчик сабмита модалки с асинхронным созданием сегмента
+# Обработчик сабмита модалки — ИСПРАВЛЕННАЯ ВЕРСИЯ
 @bolt_app.view("create_segment_modal")
 def handle_segment_submission(ack, body, client):
-    values = body["view"]["state"]["values"]
+    logger.info("🔥 НАЧАЛО: Обработка сабмита модалки")
     
-    # Извлекаем значения
-    title_data = values["title_block"]["title_input"]
-    title = title_data.get("selected_option", {}).get("value", "").strip() if title_data.get("selected_option") else ""
-    
-    country_data = values["country_block"]["country_input"]
-    country = country_data.get("selected_option", {}).get("value", "").strip() if country_data.get("selected_option") else ""
-    
-    seg_type_data = values["type_block"]["type_select"]
-    seg_type = seg_type_data.get("selected_option", {}).get("value", "") if seg_type_data.get("selected_option") else ""
-    
-    raw_val = values["value_block"]["value_input"]["value"].strip() if values["value_block"]["value_input"]["value"] else ""
-    
-    # Валидация
-    errors = {}
-    
-    if not title:
-        errors["title_block"] = "Выберите App ID"
-    
-    if not country:
-        errors["country_block"] = "Выберите страну"
+    try:
+        values = body["view"]["state"]["values"]
+        logger.info(f"📊 Получены значения из модалки")
         
-    if not seg_type:
-        errors["type_block"] = "Выберите тип сегмента"
-    
-    if not raw_val:
-        errors["value_block"] = "Введите значение"
-    else:
-        if seg_type == "RetainedAtLeast":
-            if not raw_val.isdigit():
-                errors["value_block"] = "Введите число дней (например, 7, 14, 30)"
-            else:
-                val = int(raw_val)
-                if val <= 0 or val > 365:
-                    errors["value_block"] = "Число дней должно быть от 1 до 365"
-        elif seg_type == "ActiveUsers":
-            try:
-                val = float(raw_val)
-                if val <= 0 or val > 1:
-                    errors["value_block"] = "Доля должна быть от 0.01 до 1.0"
-            except ValueError:
-                errors["value_block"] = "Введите долю (например, 0.80, 0.95)"
-    
-    if errors:
-        ack(response_action="errors", errors=errors)
-        return
-    
-    # МГНОВЕННО закрываем модалку
-    ack()
-    
-    # Создаем сегмент в фоновом режиме
-    def create_segment_async():
-        try:
-            logger.info(f"🎯 Начинаем создание сегмента: {title}, {country}, {seg_type}, {raw_val}")
+        # Извлекаем значения с более безопасным способом
+        title_data = values.get("title_block", {}).get("title_input", {})
+        if title_data.get("selected_option"):
+            title = title_data["selected_option"]["value"].strip()
+        else:
+            title = ""
+        
+        country_data = values.get("country_block", {}).get("country_input", {})
+        if country_data.get("selected_option"):
+            country = country_data["selected_option"]["value"].strip()
+        else:
+            country = ""
+        
+        seg_type_data = values.get("type_block", {}).get("type_select", {})
+        if seg_type_data.get("selected_option"):
+            seg_type = seg_type_data["selected_option"]["value"]
+        else:
+            seg_type = ""
+        
+        raw_val_data = values.get("value_block", {}).get("value_input", {})
+        raw_val = raw_val_data.get("value", "").strip() if raw_val_data.get("value") else ""
+        
+        logger.info(f"📱 Title: '{title}', 🌍 Country: '{country}', 📊 Type: '{seg_type}', 🎯 Value: '{raw_val}'")
+        
+        # Валидация
+        errors = {}
+        
+        if not title:
+            errors["title_block"] = "Выберите App ID"
+        
+        if not country:
+            errors["country_block"] = "Выберите страну"
             
-            # Проверяем авторизацию
-            if not lazy_login():
-                msg = "❌ *Ошибка авторизации в AppGrowth*\n🔧 Попробуйте позже или обратитесь к администратору"
-            else:
-                # Генерируем имя сегмента
-                if seg_type == "RetainedAtLeast":
-                    val = int(raw_val)
-                    code = str(val)
-                else:
-                    val = float(raw_val)
-                    code = raw_val.split('.')[-1] if '.' in raw_val else raw_val
-                    
-                name = f"bloom_{title}_{country}_{code}".lower()
-                
-                # Создаем сегмент
-                ok = appgrowth.create_segment(
-                    name=name,
-                    title=title,
-                    app=title,
-                    country=country,
-                    audience=val if seg_type == "ActiveUsers" else None,
-                    seg_type=seg_type
-                )
-                
-                if ok:
-                    msg = f"✅ *Сегмент успешно создан!*\n🎯 Имя: `{name}`\n📱 App: `{title}`\n🌍 Страна: `{country}`\n📊 Тип: `{seg_type}`\n🎯 Значение: `{raw_val}`"
-                    logger.info(f"✅ Сегмент создан: {name}")
-                else:
-                    msg = f"❌ *Не удалось создать сегмент*\n🔧 Проверьте параметры и попробуйте снова"
-                    logger.error(f"❌ Не удалось создать сегмент: {name}")
-                    
-        except Exception as e:
-            logger.error(f"❌ Ошибка создания сегмента: {e}")
-            msg = f"❌ *Ошибка при создании:* {e}"
+        if not seg_type:
+            errors["type_block"] = "Выберите тип сегмента"
         
-        # Отправляем результат пользователю
-        user = body["user"]["id"]
+        if not raw_val:
+            errors["value_block"] = "Введите значение"
+        else:
+            if seg_type == "RetainedAtLeast":
+                if not raw_val.isdigit():
+                    errors["value_block"] = "Введите число дней (например, 7, 14, 30)"
+                else:
+                    val = int(raw_val)
+                    if val <= 0 or val > 365:
+                        errors["value_block"] = "Число дней должно быть от 1 до 365"
+            elif seg_type == "ActiveUsers":
+                try:
+                    val = float(raw_val)
+                    if val <= 0 or val > 1:
+                        errors["value_block"] = "Доля должна быть от 0.01 до 1.0"
+                except ValueError:
+                    errors["value_block"] = "Введите долю (например, 0.80, 0.95)"
+        
+        if errors:
+            logger.warning(f"❌ Валидация не прошла: {errors}")
+            ack(response_action="errors", errors=errors)
+            return
+        
+        logger.info("✅ Валидация прошла успешно")
+        
+        # МГНОВЕННО закрываем модалку
+        ack()
+        logger.info("✅ ACK отправлен, модалка должна закрыться")
+        
+        # Извлекаем channel_id из private_metadata
+        channel_id = body["view"]["private_metadata"]
+        user_id = body["user"]["id"]
+        
+        logger.info(f"📍 Channel ID: {channel_id}, User ID: {user_id}")
+        
+        # Сразу отправляем уведомление о начале процесса
         client.chat_postEphemeral(
-            channel=body["view"]["private_metadata"], 
-            user=user, 
-            text=msg,
+            channel=channel_id,
+            user=user_id,
+            text="🔄 *Создание сегмента...*\nПодождите, это может занять несколько секунд.",
             blocks=[
                 {
                     "type": "section",
-                    "text": {"type": "mrkdwn", "text": msg}
+                    "text": {"type": "mrkdwn", "text": "🔄 *Создание сегмента...*\nПодождите, это может занять несколько секунд."}
                 }
             ]
         )
-    
-    # Запускаем создание сегмента в отдельном потоке
-    thread = threading.Thread(target=create_segment_async, daemon=True)
-    thread.start()
-    
-    # Сразу отправляем уведомление о том, что начали процесс
-    user = body["user"]["id"]
-    client.chat_postEphemeral(
-        channel=body["view"]["private_metadata"],
-        user=user,
-        text="🔄 *Создание сегмента...*\nПодождите, это может занять несколько секунд.",
-        blocks=[
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "🔄 *Создание сегмента...*\nПодождите, это может занять несколько секунд."}
-            }
-        ]
-    )
+        
+        # Создаем сегмент в фоновом режиме
+        def create_segment_async():
+            try:
+                logger.info("🎯 Начинаем создание сегмента")
+                
+                # Проверяем авторизацию
+                if not lazy_login():
+                    msg = "❌ *Ошибка авторизации в AppGrowth*\n🔧 Попробуйте позже или обратитесь к администратору"
+                else:
+                    # Генерируем имя сегмента
+                    if seg_type == "RetainedAtLeast":
+                        val = int(raw_val)
+                        code = str(val)
+                    else:
+                        val = float(raw_val)
+                        code = raw_val.split('.')[-1] if '.' in raw_val else raw_val
+                        
+                    name = f"bloom_{title}_{country}_{code}".lower()
+                    
+                    logger.info(f"🎯 Создаем сегмент: {name}")
+                    
+                    # Создаем сегмент
+                    ok = appgrowth.create_segment(
+                        name=name,
+                        title=title,
+                        app=title,
+                        country=country,
+                        audience=val if seg_type == "ActiveUsers" else None,
+                        seg_type=seg_type
+                    )
+                    
+                    if ok:
+                        msg = f"✅ *Сегмент успешно создан!*\n🎯 Имя: `{name}`\n📱 App: `{title}`\n🌍 Страна: `{country}`\n📊 Тип: `{seg_type}`\n🎯 Значение: `{raw_val}`"
+                        logger.info(f"✅ Сегмент создан: {name}")
+                    else:
+                        msg = f"❌ *Не удалось создать сегмент*\n🔧 Проверьте параметры и попробуйте снова"
+                        logger.error(f"❌ Не удалось создать сегмент: {name}")
+                        
+            except Exception as e:
+                logger.error(f"❌ Ошибка создания сегмента: {e}")
+                msg = f"❌ *Ошибка при создании:* {e}"
+            
+            # Отправляем результат пользователю
+            try:
+                client.chat_postEphemeral(
+                    channel=channel_id, 
+                    user=user_id, 
+                    text=msg,
+                    blocks=[
+                        {
+                            "type": "section",
+                            "text": {"type": "mrkdwn", "text": msg}
+                        }
+                    ]
+                )
+                logger.info("✅ Результат отправлен пользователю")
+            except Exception as e:
+                logger.error(f"❌ Ошибка отправки результата: {e}")
+        
+        # Запускаем создание сегмента в отдельном потоке
+        thread = threading.Thread(target=create_segment_async, daemon=True)
+        thread.start()
+        logger.info("🚀 Фоновое создание сегмента запущено")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка в обработчике сабмита: {e}")
+        ack()  # На всякий случай отвечаем Slack'у
 
 # Flask обёртка
 flask_app = Flask(__name__)
