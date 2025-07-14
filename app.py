@@ -1,4 +1,4 @@
-# app.py — Slack-бот для работы с AppGrowth (финальная версия)
+# app.py — Slack bot for AppGrowth (English version with Multiple Segments)
 import os
 import re
 import logging
@@ -11,41 +11,53 @@ from slack_bolt.adapter.flask import SlackRequestHandler
 
 import appgrowth
 
-# Настройка логирования
+# Logging setup
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-# Загрузка переменных окружения
+# Environment variables
 load_dotenv()
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
 
-# Популярные страны с кодами
+# Popular countries with codes
 POPULAR_COUNTRIES = [
-    {"text": {"type": "plain_text", "text": "🇺🇸 USA - Соединенные Штаты"}, "value": "USA"},
-    {"text": {"type": "plain_text", "text": "🇹🇭 THA - Таиланд"}, "value": "THA"},
-    {"text": {"type": "plain_text", "text": "🇳🇱 NLD - Нидерланды"}, "value": "NLD"},
-    {"text": {"type": "plain_text", "text": "🇩🇪 DEU - Германия"}, "value": "DEU"},
-    {"text": {"type": "plain_text", "text": "🇫🇷 FRA - Франция"}, "value": "FRA"},
-    {"text": {"type": "plain_text", "text": "🇬🇧 GBR - Великобритания"}, "value": "GBR"},
-    {"text": {"type": "plain_text", "text": "🇯🇵 JPN - Япония"}, "value": "JPN"},
-    {"text": {"type": "plain_text", "text": "🇰🇷 KOR - Корея"}, "value": "KOR"},
-    {"text": {"type": "plain_text", "text": "🇧🇷 BRA - Бразилия"}, "value": "BRA"},
-    {"text": {"type": "plain_text", "text": "🇮🇳 IND - Индия"}, "value": "IND"},
-    {"text": {"type": "plain_text", "text": "🇨🇦 CAN - Канада"}, "value": "CAN"},
-    {"text": {"type": "plain_text", "text": "🇦🇺 AUS - Австралия"}, "value": "AUS"},
-    {"text": {"type": "plain_text", "text": "🇲🇽 MEX - Мексика"}, "value": "MEX"},
-    {"text": {"type": "plain_text", "text": "🇪🇸 ESP - Испания"}, "value": "ESP"},
-    {"text": {"type": "plain_text", "text": "🇮🇹 ITA - Италия"}, "value": "ITA"}
+    {"text": {"type": "plain_text", "text": "🇺🇸 USA - United States"}, "value": "USA"},
+    {"text": {"type": "plain_text", "text": "🇹🇭 THA - Thailand"}, "value": "THA"},
+    {"text": {"type": "plain_text", "text": "🇳🇱 NLD - Netherlands"}, "value": "NLD"},
+    {"text": {"type": "plain_text", "text": "🇩🇪 DEU - Germany"}, "value": "DEU"},
+    {"text": {"type": "plain_text", "text": "🇫🇷 FRA - France"}, "value": "FRA"},
+    {"text": {"type": "plain_text", "text": "🇬🇧 GBR - United Kingdom"}, "value": "GBR"},
+    {"text": {"type": "plain_text", "text": "🇯🇵 JPN - Japan"}, "value": "JPN"},
+    {"text": {"type": "plain_text", "text": "🇰🇷 KOR - Korea"}, "value": "KOR"},
+    {"text": {"type": "plain_text", "text": "🇧🇷 BRA - Brazil"}, "value": "BRA"},
+    {"text": {"type": "plain_text", "text": "🇮🇳 IND - India"}, "value": "IND"},
+    {"text": {"type": "plain_text", "text": "🇨🇦 CAN - Canada"}, "value": "CAN"},
+    {"text": {"type": "plain_text", "text": "🇦🇺 AUS - Australia"}, "value": "AUS"},
+    {"text": {"type": "plain_text", "text": "🇲🇽 MEX - Mexico"}, "value": "MEX"},
+    {"text": {"type": "plain_text", "text": "🇪🇸 ESP - Spain"}, "value": "ESP"},
+    {"text": {"type": "plain_text", "text": "🇮🇹 ITA - Italy"}, "value": "ITA"}
 ]
 
-# Глобальная переменная для статуса авторизации
+# Segment types for multiple creation
+SEGMENT_TYPES = [
+    {"text": {"type": "plain_text", "text": "⏱️ Retained 7 days"}, "value": "RetainedAtLeast_7"},
+    {"text": {"type": "plain_text", "text": "⏱️ Retained 14 days"}, "value": "RetainedAtLeast_14"},
+    {"text": {"type": "plain_text", "text": "⏱️ Retained 30 days"}, "value": "RetainedAtLeast_30"},
+    {"text": {"type": "plain_text", "text": "👥 Active Users 60%"}, "value": "ActiveUsers_0.60"},
+    {"text": {"type": "plain_text", "text": "👥 Active Users 70%"}, "value": "ActiveUsers_0.70"},
+    {"text": {"type": "plain_text", "text": "👥 Active Users 80%"}, "value": "ActiveUsers_0.80"},
+    {"text": {"type": "plain_text", "text": "👥 Active Users 90%"}, "value": "ActiveUsers_0.90"},
+    {"text": {"type": "plain_text", "text": "👥 Active Users 95%"}, "value": "ActiveUsers_0.95"}
+]
+
+# Global auth status
 AUTH_STATUS = {"logged_in": False, "in_progress": False}
 
-# Инициализация Bolt-приложения
+# Bolt app initialization
 bolt_app = App(
     token=SLACK_BOT_TOKEN,
     signing_secret=SLACK_SIGNING_SECRET,
@@ -53,12 +65,12 @@ bolt_app = App(
 )
 
 def lazy_login():
-    """Ленивая авторизация в AppGrowth"""
+    """Lazy AppGrowth authorization"""
     if AUTH_STATUS["logged_in"]:
         return True
     
     if AUTH_STATUS["in_progress"]:
-        # Ждем завершения авторизации (максимум 10 секунд)
+        # Wait for auth completion (max 10 seconds)
         for _ in range(20):
             time.sleep(0.5)
             if AUTH_STATUS["logged_in"]:
@@ -67,47 +79,62 @@ def lazy_login():
     
     AUTH_STATUS["in_progress"] = True
     try:
-        logger.info("🔐 Выполняем авторизацию в AppGrowth...")
+        logger.info("🔐 Performing AppGrowth authorization...")
         success = appgrowth.login()
         AUTH_STATUS["logged_in"] = success
         if success:
-            logger.info("✅ Авторизация в AppGrowth успешна")
+            logger.info("✅ AppGrowth authorization successful")
         else:
-            logger.error("❌ Не удалось авторизоваться в AppGrowth")
+            logger.error("❌ Failed to authorize with AppGrowth")
         return success
     except Exception as e:
-        logger.error(f"❌ Ошибка авторизации в AppGrowth: {e}")
+        logger.error(f"❌ AppGrowth authorization error: {e}")
         return False
     finally:
         AUTH_STATUS["in_progress"] = False
 
 def async_login():
-    """Асинхронная авторизация при старте"""
+    """Async authorization on startup"""
     def login_thread():
         lazy_login()
     
     thread = threading.Thread(target=login_thread, daemon=True)
     thread.start()
-    logger.info("🚀 Запущена фоновая авторизация в AppGrowth...")
+    logger.info("🚀 Background AppGrowth authorization started...")
 
-# Запускаем авторизацию в фоновом режиме
+def generate_segment_name(app_id, country, seg_type, value):
+    """Generate segment name with proper formatting"""
+    if seg_type == "RetainedAtLeast":
+        code = str(int(value))
+    else:  # ActiveUsers
+        # Convert 0.8 to "80", 0.95 to "95", etc.
+        if isinstance(value, str):
+            value = float(value)
+        code = str(int(value * 100))
+    
+    # Ensure country is uppercase
+    country = country.upper()
+    
+    return f"bloom_{app_id}_{country}_{code}".lower()
+
+# Start background auth
 async_login()
 
-# Обработчик «/appgrowth» — главное меню
+# Main command handler
 @bolt_app.command("/appgrowth")
 def handle_appgrowth(ack, respond, command):
     ack()
     text = command.get("text", "").strip()
     
     if not text:
-        # Главная help-карточка только с сегментами
+        # Main help card
         respond(
             blocks=[
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn", 
-                        "text": "*🎯 Добро пожаловать в AppGrowth Bot!*\n\nИспользуйте бота для создания сегментов в AppGrowth:\n• Быстрое создание через удобную форму\n• Автоматическая генерация имени сегмента\n• Валидация параметров"
+                        "text": "*🎯 Welcome to AppGrowth Bot!*\n\nUse the bot to create segments in AppGrowth:\n• Quick creation through convenient forms\n• Automatic segment name generation\n• Parameter validation"
                     }
                 },
                 {
@@ -115,14 +142,15 @@ def handle_appgrowth(ack, respond, command):
                     "elements": [
                         {
                             "type": "button", 
-                            "text": {"type": "plain_text", "text": "➕ Новый сегмент"}, 
+                            "text": {"type": "plain_text", "text": "➕ New Segment"}, 
                             "action_id": "new_segment_btn",
                             "style": "primary"
                         },
                         {
                             "type": "button", 
-                            "text": {"type": "plain_text", "text": "📖 Документация"}, 
-                            "url": "https://docs.appgrowth.com"
+                            "text": {"type": "plain_text", "text": "📊 Multiple Segments"}, 
+                            "action_id": "multiple_segments_btn",
+                            "style": "secondary"
                         }
                     ]
                 },
@@ -131,7 +159,7 @@ def handle_appgrowth(ack, respond, command):
                     "elements": [
                         {
                             "type": "mrkdwn",
-                            "text": "💡 *Совет:* Используйте `/appgrowth ping` для проверки статуса бота"
+                            "text": "💡 *Tip:* Use `/appgrowth ping` to check bot status"
                         }
                     ]
                 }
@@ -140,70 +168,61 @@ def handle_appgrowth(ack, respond, command):
         return
     
     if text.lower() == 'ping':
-        auth_status = "🟢 Подключен" if AUTH_STATUS["logged_in"] else "🔄 Подключается..." if AUTH_STATUS["in_progress"] else "🔴 Не подключен"
+        auth_status = "🟢 Connected" if AUTH_STATUS["logged_in"] else "🔄 Connecting..." if AUTH_STATUS["in_progress"] else "🔴 Disconnected"
         respond(
             blocks=[
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"🟢 *pong!* Бот работает нормально ✨\n\n📊 Статус AppGrowth: {auth_status}"
+                        "text": f"🟢 *pong!* Bot is working fine ✨\n\n📊 AppGrowth Status: {auth_status}"
                     }
                 }
             ]
         )
         return
     
-    # Для любых других команд
+    # For any other commands
     respond(
         blocks=[
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"🤖 Неизвестная команда: `{text}`\n\nИспользуйте:\n• `/appgrowth` - главное меню\n• `/appgrowth ping` - проверка статуса"
+                    "text": f"🤖 Unknown command: `{text}`\n\nUse:\n• `/appgrowth` - main menu\n• `/appgrowth ping` - status check"
                 }
             }
         ]
     )
 
-# Обработчик кнопки «Новый сегмент» с простым текстовым полем
+# Single segment creation button handler
 @bolt_app.action("new_segment_btn")
 def open_segment_modal(ack, body, client):
-    # МГНОВЕННО отвечаем Slack'у
     ack()
     
-    logger.info("🎯 Открытие модалки создания сегмента")
+    logger.info("🎯 Opening single segment creation modal")
     logger.info(f"📊 Body structure: {list(body.keys())}")
     
     try:
-        # Правильно извлекаем channel_id из разных источников
+        # Extract channel_id properly
         channel_id = None
         
-        # Вариант 1: прямо в body
         if "channel_id" in body:
             channel_id = body["channel_id"]
-            logger.info(f"📍 Channel ID из body: {channel_id}")
-        
-        # Вариант 2: в channel объекте
+            logger.info(f"📍 Channel ID from body: {channel_id}")
         elif "channel" in body and "id" in body["channel"]:
             channel_id = body["channel"]["id"]
-            logger.info(f"📍 Channel ID из body.channel: {channel_id}")
-        
-        # Вариант 3: в container
+            logger.info(f"📍 Channel ID from body.channel: {channel_id}")
         elif "container" in body and "channel_id" in body["container"]:
             channel_id = body["container"]["channel_id"]
-            logger.info(f"📍 Channel ID из container: {channel_id}")
-        
-        # Вариант 4: в response_url (последний способ)
+            logger.info(f"📍 Channel ID from container: {channel_id}")
         elif "response_url" in body:
-            # Берем любой доступный ID для метаданных
             channel_id = body.get("user", {}).get("id", "unknown")
-            logger.info(f"📍 Используем user ID как fallback: {channel_id}")
+            logger.info(f"📍 Using user ID as fallback: {channel_id}")
         
         if not channel_id:
-            logger.error("❌ Не удалось найти channel_id")
-            logger.info(f"🔍 Полная структура body: {body}")
+            logger.error("❌ Could not find channel_id")
+            logger.info(f"🔍 Full body structure: {body}")
             return
         
         trigger_id = body["trigger_id"]
@@ -212,16 +231,16 @@ def open_segment_modal(ack, body, client):
             view={
                 "type": "modal",
                 "callback_id": "create_segment_modal",
-                "title": {"type": "plain_text", "text": "🎯 Новый сегмент"},
-                "submit": {"type": "plain_text", "text": "Создать"},
-                "close": {"type": "plain_text", "text": "Отмена"},
+                "title": {"type": "plain_text", "text": "🎯 New Segment"},
+                "submit": {"type": "plain_text", "text": "Create"},
+                "close": {"type": "plain_text", "text": "Cancel"},
                 "private_metadata": channel_id,
                 "blocks": [
                     {
                         "type": "section",
                         "text": {
                             "type": "mrkdwn", 
-                            "text": "*Создание нового сегмента в AppGrowth*\nЗаполните параметры для генерации сегмента:"
+                            "text": "*Creating a new segment in AppGrowth*\nFill in the parameters to generate a segment:"
                         }
                     },
                     {"type": "divider"},
@@ -234,7 +253,7 @@ def open_segment_modal(ack, body, client):
                             "placeholder": {"type": "plain_text", "text": "com.easybrain.number.puzzle.game"}
                         },
                         "label": {"type": "plain_text", "text": "📱 App ID (Bundle ID)"},
-                        "hint": {"type": "plain_text", "text": "Введите или вставьте Bundle ID приложения"}
+                        "hint": {"type": "plain_text", "text": "Enter or paste the application Bundle ID"}
                     },
                     {
                         "type": "input",
@@ -242,11 +261,11 @@ def open_segment_modal(ack, body, client):
                         "element": {
                             "type": "static_select",
                             "action_id": "country_input",
-                            "placeholder": {"type": "plain_text", "text": "Выберите страну"},
+                            "placeholder": {"type": "plain_text", "text": "Select country"},
                             "options": POPULAR_COUNTRIES
                         },
-                        "label": {"type": "plain_text", "text": "🌍 Страна"},
-                        "hint": {"type": "plain_text", "text": "Код страны из 3 букв для таргетинга"}
+                        "label": {"type": "plain_text", "text": "🌍 Country"},
+                        "hint": {"type": "plain_text", "text": "3-letter country code for targeting"}
                     },
                     {
                         "type": "input",
@@ -254,19 +273,19 @@ def open_segment_modal(ack, body, client):
                         "element": {
                             "type": "static_select",
                             "action_id": "type_select",
-                            "placeholder": {"type": "plain_text", "text": "Выберите тип сегмента"},
+                            "placeholder": {"type": "plain_text", "text": "Select segment type"},
                             "options": [
                                 {
-                                    "text": {"type": "plain_text", "text": "⏱️ RetainedAtLeast - Удержание пользователей"}, 
+                                    "text": {"type": "plain_text", "text": "⏱️ RetainedAtLeast - User Retention"}, 
                                     "value": "RetainedAtLeast"
                                 },
                                 {
-                                    "text": {"type": "plain_text", "text": "👥 ActiveUsers - Активные пользователи"}, 
+                                    "text": {"type": "plain_text", "text": "👥 ActiveUsers - Active Users"}, 
                                     "value": "ActiveUsers"
                                 }
                             ]
                         },
-                        "label": {"type": "plain_text", "text": "📊 Тип сегмента"}
+                        "label": {"type": "plain_text", "text": "📊 Segment Type"}
                     },
                     {
                         "type": "input",
@@ -274,41 +293,134 @@ def open_segment_modal(ack, body, client):
                         "element": {
                             "type": "plain_text_input",
                             "action_id": "value_input",
-                            "placeholder": {"type": "plain_text", "text": "Введите значение"}
+                            "placeholder": {"type": "plain_text", "text": "Enter value"}
                         },
-                        "label": {"type": "plain_text", "text": "🎯 Значение"},
-                        "hint": {"type": "plain_text", "text": "Для RetainedAtLeast: число дней (например, 30). Для ActiveUsers: доля от 0 до 1 (например, 0.95)"}
+                        "label": {"type": "plain_text", "text": "🎯 Value"},
+                        "hint": {"type": "plain_text", "text": "For RetainedAtLeast: number of days (e.g., 30). For ActiveUsers: ratio from 0 to 1 (e.g., 0.95)"}
                     },
                     {
                         "type": "section",
                         "block_id": "preview_block",
                         "text": {
                             "type": "mrkdwn",
-                            "text": "*Предварительное имя сегмента:*\n`bloom_[app-id]_[country]_[value]`"
+                            "text": "*Preview segment name:*\n`bloom_[app-id]_[country]_[value]`"
                         }
                     }
                 ]
             }
         )
-        logger.info("✅ Модалка успешно открыта")
+        logger.info("✅ Single segment modal opened successfully")
     except Exception as e:
-        logger.error(f"❌ Ошибка при открытии модалки: {e}")
-        logger.error(f"📊 Body для отладки: {body}")
+        logger.error(f"❌ Error opening single segment modal: {e}")
+        logger.error(f"📊 Body for debugging: {body}")
 
-# Обработчик изменений в модалке для динамического preview
+# Multiple segments creation button handler
+@bolt_app.action("multiple_segments_btn")
+def open_multiple_segments_modal(ack, body, client):
+    ack()
+    
+    logger.info("📊 Opening multiple segments creation modal")
+    
+    try:
+        # Extract channel_id properly
+        channel_id = None
+        
+        if "channel_id" in body:
+            channel_id = body["channel_id"]
+        elif "channel" in body and "id" in body["channel"]:
+            channel_id = body["channel"]["id"]
+        elif "container" in body and "channel_id" in body["container"]:
+            channel_id = body["container"]["channel_id"]
+        elif "response_url" in body:
+            channel_id = body.get("user", {}).get("id", "unknown")
+        
+        if not channel_id:
+            logger.error("❌ Could not find channel_id for multiple segments")
+            return
+        
+        trigger_id = body["trigger_id"]
+        client.views_open(
+            trigger_id=trigger_id,
+            view={
+                "type": "modal",
+                "callback_id": "create_multiple_segments_modal",
+                "title": {"type": "plain_text", "text": "📊 Multiple Segments"},
+                "submit": {"type": "plain_text", "text": "Create All"},
+                "close": {"type": "plain_text", "text": "Cancel"},
+                "private_metadata": channel_id,
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn", 
+                            "text": "*🚀 Bulk Segment Creation*\nCreate multiple segments for one app across different countries and types:"
+                        }
+                    },
+                    {"type": "divider"},
+                    {
+                        "type": "input",
+                        "block_id": "app_id_block",
+                        "element": {
+                            "type": "plain_text_input",
+                            "action_id": "app_id_input",
+                            "placeholder": {"type": "plain_text", "text": "com.easybrain.number.puzzle.game"}
+                        },
+                        "label": {"type": "plain_text", "text": "📱 App ID (Bundle ID)"},
+                        "hint": {"type": "plain_text", "text": "Enter the application Bundle ID"}
+                    },
+                    {
+                        "type": "input",
+                        "block_id": "countries_block",
+                        "element": {
+                            "type": "multi_static_select",
+                            "action_id": "countries_input",
+                            "placeholder": {"type": "plain_text", "text": "Select countries"},
+                            "options": POPULAR_COUNTRIES,
+                            "max_selected_items": 10
+                        },
+                        "label": {"type": "plain_text", "text": "🌍 Countries"},
+                        "hint": {"type": "plain_text", "text": "Select multiple countries for targeting"}
+                    },
+                    {
+                        "type": "input",
+                        "block_id": "segment_types_block",
+                        "element": {
+                            "type": "multi_static_select",
+                            "action_id": "segment_types_input",
+                            "placeholder": {"type": "plain_text", "text": "Select segment types"},
+                            "options": SEGMENT_TYPES,
+                            "max_selected_items": 8
+                        },
+                        "label": {"type": "plain_text", "text": "📊 Segment Types"},
+                        "hint": {"type": "plain_text", "text": "Select multiple segment types to create"}
+                    },
+                    {
+                        "type": "section",
+                        "block_id": "multiple_preview_block",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*📋 Preview:*\nSelect options above to see segments that will be created..."
+                        }
+                    }
+                ]
+            }
+        )
+        logger.info("✅ Multiple segments modal opened successfully")
+    except Exception as e:
+        logger.error(f"❌ Error opening multiple segments modal: {e}")
+
+# Single segment type change handler
 @bolt_app.action("type_select")
 def handle_type_change(ack, body, client):
     ack()
     
     try:
-        # Получаем текущие значения
         view_id = body["view"]["id"]
         selected_type = body["actions"][0]["selected_option"]["value"]
         
-        # Обновляем hint для поля значения в зависимости от типа
         value_hint = {
-            "RetainedAtLeast": "Число дней удержания (например, 7, 14, 30)",
-            "ActiveUsers": "Доля активных пользователей от 0 до 1 (например, 0.80, 0.95)"
+            "RetainedAtLeast": "Number of retention days (e.g., 7, 14, 30)",
+            "ActiveUsers": "Active users ratio from 0 to 1 (e.g., 0.80, 0.95)"
         }
         
         value_placeholder = {
@@ -316,19 +428,18 @@ def handle_type_change(ack, body, client):
             "ActiveUsers": "0.95"
         }
         
-        # Обновляем модалку
         updated_view = body["view"]
-        updated_view["blocks"][4]["element"]["placeholder"]["text"] = value_placeholder.get(selected_type, "Введите значение")
-        updated_view["blocks"][4]["hint"]["text"] = value_hint.get(selected_type, "Введите значение для сегмента")
+        updated_view["blocks"][4]["element"]["placeholder"]["text"] = value_placeholder.get(selected_type, "Enter value")
+        updated_view["blocks"][4]["hint"]["text"] = value_hint.get(selected_type, "Enter segment value")
         
         client.views_update(
             view_id=view_id,
             view=updated_view
         )
     except Exception as e:
-        logger.error(f"❌ Ошибка при обновлении типа: {e}")
+        logger.error(f"❌ Error updating type: {e}")
 
-# Обработчик изменений в полях для preview
+# Single segment field changes for preview
 @bolt_app.action(re.compile("title_input|country_input|value_input"))
 def handle_field_changes(ack, body, client):
     ack()
@@ -337,13 +448,11 @@ def handle_field_changes(ack, body, client):
         view_id = body["view"]["id"]
         values = body["view"]["state"]["values"]
         
-        # Извлекаем текущие значения
         title = ""
         country = ""
         value = ""
         seg_type = "ActiveUsers"  # default
         
-        # Title теперь обычное текстовое поле
         if "title_block" in values and values["title_block"]["title_input"]["value"]:
             title = values["title_block"]["title_input"]["value"]
         
@@ -356,24 +465,15 @@ def handle_field_changes(ack, body, client):
         if "value_block" in values and values["value_block"]["value_input"]["value"]:
             value = values["value_block"]["value_input"]["value"]
         
-        # Генерируем preview имени
         if title and country and value:
             try:
-                if seg_type == "RetainedAtLeast" and value.isdigit():
-                    code = value
-                elif seg_type == "ActiveUsers":
-                    code = value.split('.')[-1] if '.' in value else value
-                else:
-                    code = value
-                    
-                preview_name = f"bloom_{title}_{country}_{code}".lower()
-                preview_text = f"*Предварительное имя сегмента:*\n`{preview_name}`"
+                preview_name = generate_segment_name(title, country, seg_type, value)
+                preview_text = f"*Preview segment name:*\n`{preview_name}`"
             except:
-                preview_text = "*Предварительное имя сегмента:*\n`Заполните все поля для preview`"
+                preview_text = "*Preview segment name:*\n`Fill all fields for preview`"
         else:
-            preview_text = "*Предварительное имя сегмента:*\n`Заполните все поля для preview`"
+            preview_text = "*Preview segment name:*\n`Fill all fields for preview`"
         
-        # Обновляем preview блок
         updated_view = body["view"]
         updated_view["blocks"][5]["text"]["text"] = preview_text
         
@@ -384,16 +484,72 @@ def handle_field_changes(ack, body, client):
     except Exception as e:
         logger.warning(f"Error updating preview: {e}")
 
-# Обработчик сабмита модалки с текстовым полем App ID
+# Multiple segments field changes for preview
+@bolt_app.action(re.compile("app_id_input|countries_input|segment_types_input"))
+def handle_multiple_field_changes(ack, body, client):
+    ack()
+    
+    try:
+        view_id = body["view"]["id"]
+        values = body["view"]["state"]["values"]
+        
+        app_id = ""
+        countries = []
+        segment_types = []
+        
+        if "app_id_block" in values and values["app_id_block"]["app_id_input"]["value"]:
+            app_id = values["app_id_block"]["app_id_input"]["value"]
+        
+        if "countries_block" in values and values["countries_block"]["countries_input"]["selected_options"]:
+            countries = [opt["value"] for opt in values["countries_block"]["countries_input"]["selected_options"]]
+            
+        if "segment_types_block" in values and values["segment_types_block"]["segment_types_input"]["selected_options"]:
+            segment_types = [opt["value"] for opt in values["segment_types_block"]["segment_types_input"]["selected_options"]]
+        
+        if app_id and countries and segment_types:
+            preview_lines = ["*📋 Segments to be created:*"]
+            count = 0
+            
+            for country in countries[:3]:  # Show first 3 countries
+                for seg_type_value in segment_types[:3]:  # Show first 3 types
+                    seg_type, value = seg_type_value.split("_")
+                    preview_name = generate_segment_name(app_id, country, seg_type, value)
+                    preview_lines.append(f"• `{preview_name}`")
+                    count += 1
+                    if count >= 6:  # Limit preview to 6 items
+                        break
+                if count >= 6:
+                    break
+            
+            total_segments = len(countries) * len(segment_types)
+            if total_segments > 6:
+                preview_lines.append(f"... *and {total_segments - 6} more segments*")
+            
+            preview_lines.append(f"\n*Total: {total_segments} segments*")
+            preview_text = "\n".join(preview_lines)
+        else:
+            preview_text = "*📋 Preview:*\nSelect options above to see segments that will be created..."
+        
+        updated_view = body["view"]
+        updated_view["blocks"][4]["text"]["text"] = preview_text
+        
+        client.views_update(
+            view_id=view_id,
+            view=updated_view
+        )
+    except Exception as e:
+        logger.warning(f"Error updating multiple preview: {e}")
+
+# Single segment submission handler
 @bolt_app.view("create_segment_modal")
 def handle_segment_submission(ack, body, client):
-    logger.info("🔥 НАЧАЛО: Обработка сабмита модалки")
+    logger.info("🔥 START: Processing single segment submission")
     
     try:
         values = body["view"]["state"]["values"]
-        logger.info(f"📊 Получены значения из модалки")
+        logger.info(f"📊 Got values from modal")
         
-        # Извлекаем значения - title теперь обычное текстовое поле
+        # Extract values - title is now a regular text field
         title_data = values.get("title_block", {}).get("title_input", {})
         title = title_data.get("value", "").strip() if title_data.get("value") else ""
         
@@ -414,90 +570,88 @@ def handle_segment_submission(ack, body, client):
         
         logger.info(f"📱 Title: '{title}', 🌍 Country: '{country}', 📊 Type: '{seg_type}', 🎯 Value: '{raw_val}'")
         
-        # Валидация
+        # Validation
         errors = {}
         
         if not title:
-            errors["title_block"] = "Введите Bundle ID приложения"
+            errors["title_block"] = "Enter app Bundle ID"
         elif len(title) < 5:
-            errors["title_block"] = "Bundle ID слишком короткий"
+            errors["title_block"] = "Bundle ID too short"
         
         if not country:
-            errors["country_block"] = "Выберите страну"
+            errors["country_block"] = "Select country"
             
         if not seg_type:
-            errors["type_block"] = "Выберите тип сегмента"
+            errors["type_block"] = "Select segment type"
         
         if not raw_val:
-            errors["value_block"] = "Введите значение"
+            errors["value_block"] = "Enter value"
         else:
             if seg_type == "RetainedAtLeast":
                 if not raw_val.isdigit():
-                    errors["value_block"] = "Введите число дней (например, 7, 14, 30)"
+                    errors["value_block"] = "Enter number of days (e.g., 7, 14, 30)"
                 else:
                     val = int(raw_val)
                     if val <= 0 or val > 365:
-                        errors["value_block"] = "Число дней должно быть от 1 до 365"
+                        errors["value_block"] = "Days must be from 1 to 365"
             elif seg_type == "ActiveUsers":
                 try:
                     val = float(raw_val)
                     if val <= 0 or val > 1:
-                        errors["value_block"] = "Доля должна быть от 0.01 до 1.0"
+                        errors["value_block"] = "Ratio must be from 0.01 to 1.0"
                 except ValueError:
-                    errors["value_block"] = "Введите долю (например, 0.80, 0.95)"
+                    errors["value_block"] = "Enter ratio (e.g., 0.80, 0.95)"
         
         if errors:
-            logger.warning(f"❌ Валидация не прошла: {errors}")
+            logger.warning(f"❌ Validation failed: {errors}")
             ack(response_action="errors", errors=errors)
             return
         
-        logger.info("✅ Валидация прошла успешно")
+        logger.info("✅ Validation passed")
         
-        # МГНОВЕННО закрываем модалку
+        # Close modal immediately
         ack()
-        logger.info("✅ ACK отправлен, модалка должна закрыться")
+        logger.info("✅ ACK sent, modal should close")
         
-        # Извлекаем channel_id из private_metadata
+        # Extract channel_id from private_metadata
         channel_id = body["view"]["private_metadata"]
         user_id = body["user"]["id"]
         
         logger.info(f"📍 Channel ID: {channel_id}, User ID: {user_id}")
         
-        # Сразу отправляем уведомление о начале процесса
+        # Send immediate notification
         client.chat_postEphemeral(
             channel=channel_id,
             user=user_id,
-            text="🔄 *Создание сегмента...*\nПодождите, это может занять несколько секунд.",
+            text="🔄 *Creating segment...*\nPlease wait, this may take a few seconds.",
             blocks=[
                 {
                     "type": "section",
-                    "text": {"type": "mrkdwn", "text": "🔄 *Создание сегмента...*\nПодождите, это может занять несколько секунд."}
+                    "text": {"type": "mrkdwn", "text": "🔄 *Creating segment...*\nPlease wait, this may take a few seconds."}
                 }
             ]
         )
         
-        # Создаем сегмент в фоновом режиме
+        # Create segment in background
         def create_segment_async():
             try:
-                logger.info("🎯 Начинаем создание сегмента")
+                logger.info("🎯 Starting segment creation")
                 
-                # Проверяем авторизацию
+                # Check authorization
                 if not lazy_login():
-                    msg = "❌ *Ошибка авторизации в AppGrowth*\n🔧 Попробуйте позже или обратитесь к администратору"
+                    msg = "❌ *AppGrowth authorization error*\n🔧 Please try again later or contact administrator"
                 else:
-                    # Генерируем имя сегмента
+                    # Generate segment name with proper formatting
                     if seg_type == "RetainedAtLeast":
                         val = int(raw_val)
-                        code = str(val)
                     else:
                         val = float(raw_val)
-                        code = raw_val.split('.')[-1] if '.' in raw_val else raw_val
                         
-                    name = f"bloom_{title}_{country}_{code}".lower()
+                    name = generate_segment_name(title, country, seg_type, val)
                     
-                    logger.info(f"🎯 Создаем сегмент: {name}")
+                    logger.info(f"🎯 Creating segment: {name}")
                     
-                    # Создаем сегмент
+                    # Create segment
                     ok = appgrowth.create_segment(
                         name=name,
                         title=title,
@@ -508,17 +662,17 @@ def handle_segment_submission(ack, body, client):
                     )
                     
                     if ok:
-                        msg = f"✅ *Сегмент успешно создан!*\n🎯 Имя: `{name}`\n📱 App: `{title}`\n🌍 Страна: `{country}`\n📊 Тип: `{seg_type}`\n🎯 Значение: `{raw_val}`"
-                        logger.info(f"✅ Сегмент создан: {name}")
+                        msg = f"✅ *Segment created successfully!*\n🎯 Name: `{name}`\n📱 App: `{title}`\n🌍 Country: `{country}`\n📊 Type: `{seg_type}`\n🎯 Value: `{raw_val}`"
+                        logger.info(f"✅ Segment created: {name}")
                     else:
-                        msg = f"❌ *Не удалось создать сегмент*\n🔧 Проверьте параметры и попробуйте снова"
-                        logger.error(f"❌ Не удалось создать сегмент: {name}")
+                        msg = f"❌ *Failed to create segment*\n🔧 Please check parameters and try again"
+                        logger.error(f"❌ Failed to create segment: {name}")
                         
             except Exception as e:
-                logger.error(f"❌ Ошибка создания сегмента: {e}")
-                msg = f"❌ *Ошибка при создании:* {e}"
+                logger.error(f"❌ Segment creation error: {e}")
+                msg = f"❌ *Creation error:* {e}"
             
-            # Отправляем результат пользователю
+            # Send result to user
             try:
                 client.chat_postEphemeral(
                     channel=channel_id, 
@@ -531,20 +685,178 @@ def handle_segment_submission(ack, body, client):
                         }
                     ]
                 )
-                logger.info("✅ Результат отправлен пользователю")
+                logger.info("✅ Result sent to user")
             except Exception as e:
-                logger.error(f"❌ Ошибка отправки результата: {e}")
+                logger.error(f"❌ Error sending result: {e}")
         
-        # Запускаем создание сегмента в отдельном потоке
+        # Start segment creation in separate thread
         thread = threading.Thread(target=create_segment_async, daemon=True)
         thread.start()
-        logger.info("🚀 Фоновое создание сегмента запущено")
+        logger.info("🚀 Background segment creation started")
         
     except Exception as e:
-        logger.error(f"❌ Ошибка в обработчике сабмита: {e}")
-        ack()  # На всякий случай отвечаем Slack'у
+        logger.error(f"❌ Error in submission handler: {e}")
+        ack()  # Just in case, respond to Slack
 
-# Flask обёртка
+# Multiple segments submission handler
+@bolt_app.view("create_multiple_segments_modal")
+def handle_multiple_segments_submission(ack, body, client):
+    logger.info("🔥 START: Processing multiple segments submission")
+    
+    try:
+        values = body["view"]["state"]["values"]
+        
+        # Extract values
+        app_id_data = values.get("app_id_block", {}).get("app_id_input", {})
+        app_id = app_id_data.get("value", "").strip() if app_id_data.get("value") else ""
+        
+        countries_data = values.get("countries_block", {}).get("countries_input", {})
+        countries = [opt["value"] for opt in countries_data.get("selected_options", [])]
+        
+        segment_types_data = values.get("segment_types_block", {}).get("segment_types_input", {})
+        segment_types = [opt["value"] for opt in segment_types_data.get("selected_options", [])]
+        
+        logger.info(f"📱 App ID: '{app_id}', 🌍 Countries: {countries}, 📊 Types: {segment_types}")
+        
+        # Validation
+        errors = {}
+        
+        if not app_id:
+            errors["app_id_block"] = "Enter app Bundle ID"
+        elif len(app_id) < 5:
+            errors["app_id_block"] = "Bundle ID too short"
+        
+        if not countries:
+            errors["countries_block"] = "Select at least one country"
+            
+        if not segment_types:
+            errors["segment_types_block"] = "Select at least one segment type"
+        
+        if errors:
+            logger.warning(f"❌ Multiple segments validation failed: {errors}")
+            ack(response_action="errors", errors=errors)
+            return
+        
+        logger.info("✅ Multiple segments validation passed")
+        
+        # Close modal immediately
+        ack()
+        
+        channel_id = body["view"]["private_metadata"]
+        user_id = body["user"]["id"]
+        
+        total_segments = len(countries) * len(segment_types)
+        
+        # Send immediate notification
+        client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=f"🔄 *Creating {total_segments} segments...*\nPlease wait, this may take a minute.",
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"🔄 *Creating {total_segments} segments...*\nPlease wait, this may take a minute."}
+                }
+            ]
+        )
+        
+        # Create segments in background
+        def create_multiple_segments_async():
+            try:
+                logger.info(f"🎯 Starting creation of {total_segments} segments")
+                
+                if not lazy_login():
+                    msg = "❌ *AppGrowth authorization error*\n🔧 Please try again later"
+                    client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
+                    return
+                
+                created_segments = []
+                failed_segments = []
+                
+                for country in countries:
+                    for seg_type_value in segment_types:
+                        seg_type, value = seg_type_value.split("_")
+                        
+                        try:
+                            name = generate_segment_name(app_id, country, seg_type, value)
+                            
+                            logger.info(f"🎯 Creating segment: {name}")
+                            
+                            if seg_type == "RetainedAtLeast":
+                                val = int(value)
+                                ok = appgrowth.create_segment(
+                                    name=name,
+                                    title=app_id,
+                                    app=app_id,
+                                    country=country,
+                                    audience=None,
+                                    seg_type=seg_type
+                                )
+                            else:  # ActiveUsers
+                                val = float(value)
+                                ok = appgrowth.create_segment(
+                                    name=name,
+                                    title=app_id,
+                                    app=app_id,
+                                    country=country,
+                                    audience=val,
+                                    seg_type=seg_type
+                                )
+                            
+                            if ok:
+                                created_segments.append(name)
+                                logger.info(f"✅ Created: {name}")
+                            else:
+                                failed_segments.append(name)
+                                logger.error(f"❌ Failed: {name}")
+                                
+                        except Exception as e:
+                            failed_segments.append(f"{country}_{seg_type}_{value}")
+                            logger.error(f"❌ Error creating segment {country}_{seg_type}_{value}: {e}")
+                        
+                        # Small delay between requests
+                        time.sleep(0.5)
+                
+                # Send final result
+                success_count = len(created_segments)
+                fail_count = len(failed_segments)
+                
+                if success_count > 0 and fail_count == 0:
+                    msg = f"🎉 *All {success_count} segments created successfully!*\n\n📋 Created segments:\n" + "\n".join([f"• `{name}`" for name in created_segments[:10]])
+                    if success_count > 10:
+                        msg += f"\n... and {success_count - 10} more"
+                elif success_count > 0 and fail_count > 0:
+                    msg = f"⚠️ *Partially completed: {success_count}/{total_segments} segments created*\n\n✅ Success: {success_count}\n❌ Failed: {fail_count}"
+                else:
+                    msg = f"❌ *Failed to create any segments*\n🔧 Please check parameters and try again"
+                
+                client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text=msg,
+                    blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": msg}}]
+                )
+                
+                logger.info(f"✅ Multiple segments process completed: {success_count} success, {fail_count} failed")
+                
+            except Exception as e:
+                logger.error(f"❌ Multiple segments creation error: {e}")
+                client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text=f"❌ *Error creating segments:* {e}"
+                )
+        
+        # Start creation in separate thread
+        thread = threading.Thread(target=create_multiple_segments_async, daemon=True)
+        thread.start()
+        logger.info("🚀 Background multiple segments creation started")
+        
+    except Exception as e:
+        logger.error(f"❌ Error in multiple segments handler: {e}")
+        ack()
+
+# Flask wrapper
 flask_app = Flask(__name__)
 handler = SlackRequestHandler(bolt_app)
 
@@ -563,5 +875,5 @@ def health_check():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    logger.info(f"🚀 Запуск бота на порту {port}")
+    logger.info(f"🚀 Starting bot on port {port}")
     flask_app.run(host="0.0.0.0", port=port)
