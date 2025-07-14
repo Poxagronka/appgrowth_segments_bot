@@ -1,4 +1,4 @@
-# app.py — Slack bot for AppGrowth (English version with Multiple Segments)
+# app.py — Slack bot for AppGrowth (Fixed version)
 import os
 import re
 import logging
@@ -70,7 +70,6 @@ def lazy_login():
         return True
     
     if AUTH_STATUS["in_progress"]:
-        # Wait for auth completion (max 10 seconds)
         for _ in range(20):
             time.sleep(0.5)
             if AUTH_STATUS["logged_in"]:
@@ -107,14 +106,11 @@ def generate_segment_name(app_id, country, seg_type, value):
     if seg_type == "RetainedAtLeast":
         code = str(int(value)) + "d"  # Add 'd' for days: 30d, 7d, 1d
     else:  # ActiveUsers
-        # Convert 0.8 to "80", 0.95 to "95", etc.
         if isinstance(value, str):
             value = float(value)
         code = str(int(value * 100))
     
-    # Ensure country is uppercase
     country = country.upper()
-    
     return f"bloom_{app_id}_{country}_{code}".lower()
 
 # Start background auth
@@ -124,10 +120,13 @@ async_login()
 @bolt_app.command("/appgrowth")
 def handle_appgrowth(ack, respond, command):
     ack()
+    
+    logger.info("🎯 Processing /appgrowth command")
+    
     text = command.get("text", "").strip()
     
     if not text:
-        # Main help card
+        logger.info("📋 Showing main menu")
         respond(
             blocks=[
                 {
@@ -169,6 +168,7 @@ def handle_appgrowth(ack, respond, command):
     
     if text.lower() == 'ping':
         auth_status = "🟢 Connected" if AUTH_STATUS["logged_in"] else "🔄 Connecting..." if AUTH_STATUS["in_progress"] else "🔴 Disconnected"
+        logger.info(f"📊 Ping command - auth status: {auth_status}")
         respond(
             blocks=[
                 {
@@ -201,7 +201,6 @@ def open_segment_modal(ack, body, client):
     ack()
     
     logger.info("🎯 Opening single segment creation modal")
-    logger.info(f"📊 Body structure: {list(body.keys())}")
     
     try:
         # Extract channel_id properly
@@ -209,20 +208,15 @@ def open_segment_modal(ack, body, client):
         
         if "channel_id" in body:
             channel_id = body["channel_id"]
-            logger.info(f"📍 Channel ID from body: {channel_id}")
         elif "channel" in body and "id" in body["channel"]:
             channel_id = body["channel"]["id"]
-            logger.info(f"📍 Channel ID from body.channel: {channel_id}")
         elif "container" in body and "channel_id" in body["container"]:
             channel_id = body["container"]["channel_id"]
-            logger.info(f"📍 Channel ID from container: {channel_id}")
         elif "response_url" in body:
             channel_id = body.get("user", {}).get("id", "unknown")
-            logger.info(f"📍 Using user ID as fallback: {channel_id}")
         
         if not channel_id:
             logger.error("❌ Could not find channel_id")
-            logger.info(f"🔍 Full body structure: {body}")
             return
         
         trigger_id = body["trigger_id"]
@@ -312,9 +306,8 @@ def open_segment_modal(ack, body, client):
         logger.info("✅ Single segment modal opened successfully")
     except Exception as e:
         logger.error(f"❌ Error opening single segment modal: {e}")
-        logger.error(f"📊 Body for debugging: {body}")
 
-# Multiple segments creation button handler
+# Multiple segments creation button handler  
 @bolt_app.action("multiple_segments_btn")
 def open_multiple_segments_modal(ack, body, client):
     ack()
@@ -322,7 +315,6 @@ def open_multiple_segments_modal(ack, body, client):
     logger.info("📊 Opening multiple segments creation modal")
     
     try:
-        # Extract channel_id properly
         channel_id = None
         
         if "channel_id" in body:
@@ -409,7 +401,7 @@ def open_multiple_segments_modal(ack, body, client):
     except Exception as e:
         logger.error(f"❌ Error opening multiple segments modal: {e}")
 
-# Single segment type change handler
+# Type change handler
 @bolt_app.action("type_select")
 def handle_type_change(ack, body, client):
     ack()
@@ -439,8 +431,8 @@ def handle_type_change(ack, body, client):
     except Exception as e:
         logger.error(f"❌ Error updating type: {e}")
 
-# Single segment field changes for preview
-@bolt_app.action(re.compile("title_input|country_input|value_input"))
+# Field changes for preview
+@bolt_app.action(re.compile("title_input|country_input|value_input|app_id_input|countries_input|segment_types_input"))
 def handle_field_changes(ack, body, client):
     ack()
     
@@ -448,34 +440,77 @@ def handle_field_changes(ack, body, client):
         view_id = body["view"]["id"]
         values = body["view"]["state"]["values"]
         
-        title = ""
-        country = ""
-        value = ""
-        seg_type = "ActiveUsers"  # default
-        
-        if "title_block" in values and values["title_block"]["title_input"]["value"]:
-            title = values["title_block"]["title_input"]["value"]
-        
-        if "country_block" in values and values["country_block"]["country_input"]["selected_option"]:
-            country = values["country_block"]["country_input"]["selected_option"]["value"]
+        # Check if this is single or multiple segment modal
+        if "title_block" in values:  # Single segment
+            title = ""
+            country = ""
+            value = ""
+            seg_type = "ActiveUsers"
             
-        if "type_block" in values and values["type_block"]["type_select"]["selected_option"]:
-            seg_type = values["type_block"]["type_select"]["selected_option"]["value"]
+            if "title_block" in values and values["title_block"]["title_input"]["value"]:
+                title = values["title_block"]["title_input"]["value"]
             
-        if "value_block" in values and values["value_block"]["value_input"]["value"]:
-            value = values["value_block"]["value_input"]["value"]
-        
-        if title and country and value:
-            try:
-                preview_name = generate_segment_name(title, country, seg_type, value)
-                preview_text = f"*Preview segment name:*\n`{preview_name}`"
-            except:
+            if "country_block" in values and values["country_block"]["country_input"]["selected_option"]:
+                country = values["country_block"]["country_input"]["selected_option"]["value"]
+                
+            if "type_block" in values and values["type_block"]["type_select"]["selected_option"]:
+                seg_type = values["type_block"]["type_select"]["selected_option"]["value"]
+                
+            if "value_block" in values and values["value_block"]["value_input"]["value"]:
+                value = values["value_block"]["value_input"]["value"]
+            
+            if title and country and value:
+                try:
+                    preview_name = generate_segment_name(title, country, seg_type, value)
+                    preview_text = f"*Preview segment name:*\n`{preview_name}`"
+                except:
+                    preview_text = "*Preview segment name:*\n`Fill all fields for preview`"
+            else:
                 preview_text = "*Preview segment name:*\n`Fill all fields for preview`"
-        else:
-            preview_text = "*Preview segment name:*\n`Fill all fields for preview`"
+            
+            updated_view = body["view"]
+            updated_view["blocks"][5]["text"]["text"] = preview_text
         
-        updated_view = body["view"]
-        updated_view["blocks"][5]["text"]["text"] = preview_text
+        else:  # Multiple segments
+            app_id = ""
+            countries = []
+            segment_types = []
+            
+            if "app_id_block" in values and values["app_id_block"]["app_id_input"]["value"]:
+                app_id = values["app_id_block"]["app_id_input"]["value"]
+            
+            if "countries_block" in values and values["countries_block"]["countries_input"]["selected_options"]:
+                countries = [opt["value"] for opt in values["countries_block"]["countries_input"]["selected_options"]]
+                
+            if "segment_types_block" in values and values["segment_types_block"]["segment_types_input"]["selected_options"]:
+                segment_types = [opt["value"] for opt in values["segment_types_block"]["segment_types_input"]["selected_options"]]
+            
+            if app_id and countries and segment_types:
+                preview_lines = ["*📋 Segments to be created:*"]
+                count = 0
+                
+                for country in countries[:3]:
+                    for seg_type_value in segment_types[:3]:
+                        seg_type, value = seg_type_value.split("_")
+                        preview_name = generate_segment_name(app_id, country, seg_type, value)
+                        preview_lines.append(f"• `{preview_name}`")
+                        count += 1
+                        if count >= 6:
+                            break
+                    if count >= 6:
+                        break
+                
+                total_segments = len(countries) * len(segment_types)
+                if total_segments > 6:
+                    preview_lines.append(f"... *and {total_segments - 6} more segments*")
+                
+                preview_lines.append(f"\n*Total: {total_segments} segments*")
+                preview_text = "\n".join(preview_lines)
+            else:
+                preview_text = "*📋 Preview:*\nSelect options above to see segments that will be created..."
+            
+            updated_view = body["view"]
+            updated_view["blocks"][4]["text"]["text"] = preview_text
         
         client.views_update(
             view_id=view_id,
@@ -484,62 +519,6 @@ def handle_field_changes(ack, body, client):
     except Exception as e:
         logger.warning(f"Error updating preview: {e}")
 
-# Multiple segments field changes for preview
-@bolt_app.action(re.compile("app_id_input|countries_input|segment_types_input"))
-def handle_multiple_field_changes(ack, body, client):
-    ack()
-    
-    try:
-        view_id = body["view"]["id"]
-        values = body["view"]["state"]["values"]
-        
-        app_id = ""
-        countries = []
-        segment_types = []
-        
-        if "app_id_block" in values and values["app_id_block"]["app_id_input"]["value"]:
-            app_id = values["app_id_block"]["app_id_input"]["value"]
-        
-        if "countries_block" in values and values["countries_block"]["countries_input"]["selected_options"]:
-            countries = [opt["value"] for opt in values["countries_block"]["countries_input"]["selected_options"]]
-            
-        if "segment_types_block" in values and values["segment_types_block"]["segment_types_input"]["selected_options"]:
-            segment_types = [opt["value"] for opt in values["segment_types_block"]["segment_types_input"]["selected_options"]]
-        
-        if app_id and countries and segment_types:
-            preview_lines = ["*📋 Segments to be created:*"]
-            count = 0
-            
-            for country in countries[:3]:  # Show first 3 countries
-                for seg_type_value in segment_types[:3]:  # Show first 3 types
-                    seg_type, value = seg_type_value.split("_")
-                    preview_name = generate_segment_name(app_id, country, seg_type, value)
-                    preview_lines.append(f"• `{preview_name}`")
-                    count += 1
-                    if count >= 6:  # Limit preview to 6 items
-                        break
-                if count >= 6:
-                    break
-            
-            total_segments = len(countries) * len(segment_types)
-            if total_segments > 6:
-                preview_lines.append(f"... *and {total_segments - 6} more segments*")
-            
-            preview_lines.append(f"\n*Total: {total_segments} segments*")
-            preview_text = "\n".join(preview_lines)
-        else:
-            preview_text = "*📋 Preview:*\nSelect options above to see segments that will be created..."
-        
-        updated_view = body["view"]
-        updated_view["blocks"][4]["text"]["text"] = preview_text
-        
-        client.views_update(
-            view_id=view_id,
-            view=updated_view
-        )
-    except Exception as e:
-        logger.warning(f"Error updating multiple preview: {e}")
-
 # Single segment submission handler
 @bolt_app.view("create_segment_modal")
 def handle_segment_submission(ack, body, client):
@@ -547,9 +526,7 @@ def handle_segment_submission(ack, body, client):
     
     try:
         values = body["view"]["state"]["values"]
-        logger.info(f"📊 Got values from modal")
         
-        # Extract values - title is now a regular text field
         title_data = values.get("title_block", {}).get("title_input", {})
         title = title_data.get("value", "").strip() if title_data.get("value") else ""
         
@@ -608,18 +585,14 @@ def handle_segment_submission(ack, body, client):
             return
         
         logger.info("✅ Validation passed")
-        
-        # Close modal immediately
         ack()
         logger.info("✅ ACK sent, modal should close")
         
-        # Extract channel_id from private_metadata
         channel_id = body["view"]["private_metadata"]
         user_id = body["user"]["id"]
         
         logger.info(f"📍 Channel ID: {channel_id}, User ID: {user_id}")
         
-        # Send immediate notification
         client.chat_postEphemeral(
             channel=channel_id,
             user=user_id,
@@ -632,34 +605,40 @@ def handle_segment_submission(ack, body, client):
             ]
         )
         
-        # Create segment in background
         def create_segment_async():
             try:
                 logger.info("🎯 Starting segment creation")
                 
-                # Check authorization
                 if not lazy_login():
                     msg = "❌ *AppGrowth authorization error*\n🔧 Please try again later or contact administrator"
                 else:
-                    # Generate segment name with proper formatting
                     if seg_type == "RetainedAtLeast":
                         val = int(raw_val)
                     else:
                         val = float(raw_val)
                         
                     name = generate_segment_name(title, country, seg_type, val)
-                    
                     logger.info(f"🎯 Creating segment: {name}")
                     
-                    # Create segment
-                    ok = appgrowth.create_segment(
-                        name=name,
-                        title=title,
-                        app=title,
-                        country=country,
-                        audience=val if seg_type == "ActiveUsers" else None,
-                        seg_type=seg_type
-                    )
+                    # FIXED: Use proper audience parameter
+                    if seg_type == "RetainedAtLeast":
+                        ok = appgrowth.create_segment(
+                            name=name,
+                            title=title,
+                            app=title,
+                            country=country,
+                            audience=0.95,  # Default value instead of None
+                            seg_type=seg_type
+                        )
+                    else:  # ActiveUsers
+                        ok = appgrowth.create_segment(
+                            name=name,
+                            title=title,
+                            app=title,
+                            country=country,
+                            audience=val,
+                            seg_type=seg_type
+                        )
                     
                     if ok:
                         msg = f"✅ *Segment created successfully!*\n🎯 Name: `{name}`\n📱 App: `{title}`\n🌍 Country: `{country}`\n📊 Type: `{seg_type}`\n🎯 Value: `{raw_val}`"
@@ -672,7 +651,6 @@ def handle_segment_submission(ack, body, client):
                 logger.error(f"❌ Segment creation error: {e}")
                 msg = f"❌ *Creation error:* {e}"
             
-            # Send result to user
             try:
                 client.chat_postEphemeral(
                     channel=channel_id, 
@@ -689,14 +667,13 @@ def handle_segment_submission(ack, body, client):
             except Exception as e:
                 logger.error(f"❌ Error sending result: {e}")
         
-        # Start segment creation in separate thread
         thread = threading.Thread(target=create_segment_async, daemon=True)
         thread.start()
         logger.info("🚀 Background segment creation started")
         
     except Exception as e:
         logger.error(f"❌ Error in submission handler: {e}")
-        ack()  # Just in case, respond to Slack
+        ack()
 
 # Multiple segments submission handler
 @bolt_app.view("create_multiple_segments_modal")
@@ -706,7 +683,6 @@ def handle_multiple_segments_submission(ack, body, client):
     try:
         values = body["view"]["state"]["values"]
         
-        # Extract values
         app_id_data = values.get("app_id_block", {}).get("app_id_input", {})
         app_id = app_id_data.get("value", "").strip() if app_id_data.get("value") else ""
         
@@ -718,7 +694,6 @@ def handle_multiple_segments_submission(ack, body, client):
         
         logger.info(f"📱 App ID: '{app_id}', 🌍 Countries: {countries}, 📊 Types: {segment_types}")
         
-        # Validation
         errors = {}
         
         if not app_id:
@@ -738,8 +713,6 @@ def handle_multiple_segments_submission(ack, body, client):
             return
         
         logger.info("✅ Multiple segments validation passed")
-        
-        # Close modal immediately
         ack()
         
         channel_id = body["view"]["private_metadata"]
@@ -747,7 +720,6 @@ def handle_multiple_segments_submission(ack, body, client):
         
         total_segments = len(countries) * len(segment_types)
         
-        # Send immediate notification
         client.chat_postEphemeral(
             channel=channel_id,
             user=user_id,
@@ -760,7 +732,6 @@ def handle_multiple_segments_submission(ack, body, client):
             ]
         )
         
-        # Create segments in background
         def create_multiple_segments_async():
             try:
                 logger.info(f"🎯 Starting creation of {total_segments} segments")
@@ -779,17 +750,16 @@ def handle_multiple_segments_submission(ack, body, client):
                         
                         try:
                             name = generate_segment_name(app_id, country, seg_type, value)
-                            
                             logger.info(f"🎯 Creating segment: {name}")
                             
+                            # FIXED: Use proper audience parameter
                             if seg_type == "RetainedAtLeast":
-                                val = int(value)
                                 ok = appgrowth.create_segment(
                                     name=name,
                                     title=app_id,
                                     app=app_id,
                                     country=country,
-                                    audience=None,
+                                    audience=0.95,  # Default value instead of None
                                     seg_type=seg_type
                                 )
                             else:  # ActiveUsers
@@ -814,10 +784,8 @@ def handle_multiple_segments_submission(ack, body, client):
                             failed_segments.append(f"{country}_{seg_type}_{value}")
                             logger.error(f"❌ Error creating segment {country}_{seg_type}_{value}: {e}")
                         
-                        # Small delay between requests
                         time.sleep(0.5)
                 
-                # Send final result
                 success_count = len(created_segments)
                 fail_count = len(failed_segments)
                 
@@ -847,7 +815,6 @@ def handle_multiple_segments_submission(ack, body, client):
                     text=f"❌ *Error creating segments:* {e}"
                 )
         
-        # Start creation in separate thread
         thread = threading.Thread(target=create_multiple_segments_async, daemon=True)
         thread.start()
         logger.info("🚀 Background multiple segments creation started")
