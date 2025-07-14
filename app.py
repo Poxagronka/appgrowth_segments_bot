@@ -1,7 +1,9 @@
-# app.py — Slack-бот для работы с AppGrowth (улучшенная версия)
+# app.py — Slack-бот для работы с AppGrowth (оптимизированная версия без таймаутов)
 import os
 import re
 import logging
+import threading
+import time
 from dotenv import load_dotenv
 from flask import Flask, request
 from slack_bolt import App
@@ -59,6 +61,9 @@ POPULAR_COUNTRIES = [
     {"text": {"type": "plain_text", "text": "🇮🇹 ITA - Италия"}, "value": "ITA"}
 ]
 
+# Глобальная переменная для статуса авторизации
+AUTH_STATUS = {"logged_in": False, "in_progress": False}
+
 # Инициализация Bolt-приложения
 bolt_app = App(
     token=SLACK_BOT_TOKEN,
@@ -66,10 +71,46 @@ bolt_app = App(
     logger=logger,
 )
 
-# Авторизация в AppGrowth при старте
-if not appgrowth.login():
-    logger.critical("Не удалось авторизоваться в AppGrowth — выходим")
-    raise RuntimeError("AppGrowth auth failed :(")
+def lazy_login():
+    """Ленивая авторизация в AppGrowth"""
+    if AUTH_STATUS["logged_in"]:
+        return True
+    
+    if AUTH_STATUS["in_progress"]:
+        # Ждем завершения авторизации (максимум 10 секунд)
+        for _ in range(20):
+            time.sleep(0.5)
+            if AUTH_STATUS["logged_in"]:
+                return True
+        return False
+    
+    AUTH_STATUS["in_progress"] = True
+    try:
+        logger.info("🔐 Выполняем авторизацию в AppGrowth...")
+        success = appgrowth.login()
+        AUTH_STATUS["logged_in"] = success
+        if success:
+            logger.info("✅ Авторизация в AppGrowth успешна")
+        else:
+            logger.error("❌ Не удалось авторизоваться в AppGrowth")
+        return success
+    except Exception as e:
+        logger.error(f"❌ Ошибка авторизации в AppGrowth: {e}")
+        return False
+    finally:
+        AUTH_STATUS["in_progress"] = False
+
+def async_login():
+    """Асинхронная авторизация при старте"""
+    def login_thread():
+        lazy_login()
+    
+    thread = threading.Thread(target=login_thread, daemon=True)
+    thread.start()
+    logger.info("🚀 Запущена фоновая авторизация в AppGrowth...")
+
+# Запускаем авторизацию в фоновом режиме
+async_login()
 
 # Обработчик «/appgrowth» — главное меню
 @bolt_app.command("/appgrowth")
@@ -118,13 +159,14 @@ def handle_appgrowth(ack, respond, command):
         return
     
     if text.lower() == 'ping':
+        auth_status = "🟢 Подключен" if AUTH_STATUS["logged_in"] else "🔄 Подключается..." if AUTH_STATUS["in_progress"] else "🔴 Не подключен"
         respond(
             blocks=[
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "🟢 *pong!* Бот работает нормально ✨"
+                        "text": f"🟢 *pong!* Бот работает нормально ✨\n\n📊 Статус AppGrowth: {auth_status}"
                     }
                 }
             ]
@@ -144,95 +186,103 @@ def handle_appgrowth(ack, respond, command):
         ]
     )
 
-# Обработчик кнопки «Новый сегмент»
+# Обработчик кнопки «Новый сегмент» — БЫСТРЫЙ ОТВЕТ
 @bolt_app.action("new_segment_btn")
 def open_segment_modal(ack, body, client):
+    # МГНОВЕННО отвечаем Slack'у
     ack()
-    trigger_id = body["trigger_id"]
-    client.views_open(
-        trigger_id=trigger_id,
-        view={
-            "type": "modal",
-            "callback_id": "create_segment_modal",
-            "title": {"type": "plain_text", "text": "🎯 Новый сегмент"},
-            "submit": {"type": "plain_text", "text": "Создать"},
-            "close": {"type": "plain_text", "text": "Отмена"},
-            "private_metadata": body["channel_id"],
-            "blocks": [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn", 
-                        "text": "*Создание нового сегмента в AppGrowth*\nЗаполните параметры для генерации сегмента:"
+    
+    logger.info("🎯 Открытие модалки создания сегмента")
+    
+    try:
+        trigger_id = body["trigger_id"]
+        client.views_open(
+            trigger_id=trigger_id,
+            view={
+                "type": "modal",
+                "callback_id": "create_segment_modal",
+                "title": {"type": "plain_text", "text": "🎯 Новый сегмент"},
+                "submit": {"type": "plain_text", "text": "Создать"},
+                "close": {"type": "plain_text", "text": "Отмена"},
+                "private_metadata": body["channel_id"],
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn", 
+                            "text": "*Создание нового сегмента в AppGrowth*\nЗаполните параметры для генерации сегмента:"
+                        }
+                    },
+                    {"type": "divider"},
+                    {
+                        "type": "input",
+                        "block_id": "title_block",
+                        "element": {
+                            "type": "external_select",
+                            "action_id": "title_input",
+                            "placeholder": {"type": "plain_text", "text": "Выберите или введите App ID"},
+                            "min_query_length": 3
+                        },
+                        "label": {"type": "plain_text", "text": "📱 App ID"},
+                        "hint": {"type": "plain_text", "text": "Bundle ID приложения, например com.easybrain.number.puzzle.game"}
+                    },
+                    {
+                        "type": "input",
+                        "block_id": "country_block",
+                        "element": {
+                            "type": "static_select",
+                            "action_id": "country_input",
+                            "placeholder": {"type": "plain_text", "text": "Выберите страну"},
+                            "options": POPULAR_COUNTRIES
+                        },
+                        "label": {"type": "plain_text", "text": "🌍 Страна"},
+                        "hint": {"type": "plain_text", "text": "Код страны из 3 букв для таргетинга"}
+                    },
+                    {
+                        "type": "input",
+                        "block_id": "type_block",
+                        "element": {
+                            "type": "static_select",
+                            "action_id": "type_select",
+                            "placeholder": {"type": "plain_text", "text": "Выберите тип сегмента"},
+                            "options": [
+                                {
+                                    "text": {"type": "plain_text", "text": "⏱️ RetainedAtLeast - Удержание пользователей"}, 
+                                    "value": "RetainedAtLeast"
+                                },
+                                {
+                                    "text": {"type": "plain_text", "text": "👥 ActiveUsers - Активные пользователи"}, 
+                                    "value": "ActiveUsers"
+                                }
+                            ]
+                        },
+                        "label": {"type": "plain_text", "text": "📊 Тип сегмента"}
+                    },
+                    {
+                        "type": "input",
+                        "block_id": "value_block",
+                        "element": {
+                            "type": "plain_text_input",
+                            "action_id": "value_input",
+                            "placeholder": {"type": "plain_text", "text": "Введите значение"}
+                        },
+                        "label": {"type": "plain_text", "text": "🎯 Значение"},
+                        "hint": {"type": "plain_text", "text": "Для RetainedAtLeast: число дней (например, 30). Для ActiveUsers: доля от 0 до 1 (например, 0.95)"}
+                    },
+                    {
+                        "type": "section",
+                        "block_id": "preview_block",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Предварительное имя сегмента:*\n`bloom_[app-id]_[country]_[value]`"
+                        }
                     }
-                },
-                {"type": "divider"},
-                {
-                    "type": "input",
-                    "block_id": "title_block",
-                    "element": {
-                        "type": "external_select",
-                        "action_id": "title_input",
-                        "placeholder": {"type": "plain_text", "text": "Выберите или введите App ID"},
-                        "min_query_length": 3
-                    },
-                    "label": {"type": "plain_text", "text": "📱 App ID"},
-                    "hint": {"type": "plain_text", "text": "Bundle ID приложения, например com.easybrain.number.puzzle.game"}
-                },
-                {
-                    "type": "input",
-                    "block_id": "country_block",
-                    "element": {
-                        "type": "static_select",
-                        "action_id": "country_input",
-                        "placeholder": {"type": "plain_text", "text": "Выберите страну"},
-                        "options": POPULAR_COUNTRIES
-                    },
-                    "label": {"type": "plain_text", "text": "🌍 Страна"},
-                    "hint": {"type": "plain_text", "text": "Код страны из 3 букв для таргетинга"}
-                },
-                {
-                    "type": "input",
-                    "block_id": "type_block",
-                    "element": {
-                        "type": "static_select",
-                        "action_id": "type_select",
-                        "placeholder": {"type": "plain_text", "text": "Выберите тип сегмента"},
-                        "options": [
-                            {
-                                "text": {"type": "plain_text", "text": "⏱️ RetainedAtLeast - Удержание пользователей"}, 
-                                "value": "RetainedAtLeast"
-                            },
-                            {
-                                "text": {"type": "plain_text", "text": "👥 ActiveUsers - Активные пользователи"}, 
-                                "value": "ActiveUsers"
-                            }
-                        ]
-                    },
-                    "label": {"type": "plain_text", "text": "📊 Тип сегмента"}
-                },
-                {
-                    "type": "input",
-                    "block_id": "value_block",
-                    "element": {
-                        "type": "plain_text_input",
-                        "action_id": "value_input",
-                        "placeholder": {"type": "plain_text", "text": "Введите значение"}
-                    },
-                    "label": {"type": "plain_text", "text": "🎯 Значение"},
-                    "hint": {"type": "plain_text", "text": "Для RetainedAtLeast: число дней (например, 30). Для ActiveUsers: доля от 0 до 1 (например, 0.95)"}
-                },
-                {
-                    "type": "section",
-                    "block_id": "preview_block",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": "*Предварительное имя сегмента:*\n`bloom_[app-id]_[country]_[value]`"
-                    }
-                }
-            ]
-        }
-    )
+                ]
+            }
+        )
+        logger.info("✅ Модалка успешно открыта")
+    except Exception as e:
+        logger.error(f"❌ Ошибка при открытии модалки: {e}")
 
 # Обработчик автокомплита для App ID
 @bolt_app.options("title_input")
@@ -262,30 +312,33 @@ def handle_app_id_options(ack, body):
 def handle_type_change(ack, body, client):
     ack()
     
-    # Получаем текущие значения
-    view_id = body["view"]["id"]
-    selected_type = body["actions"][0]["selected_option"]["value"]
-    
-    # Обновляем hint для поля значения в зависимости от типа
-    value_hint = {
-        "RetainedAtLeast": "Число дней удержания (например, 7, 14, 30)",
-        "ActiveUsers": "Доля активных пользователей от 0 до 1 (например, 0.80, 0.95)"
-    }
-    
-    value_placeholder = {
-        "RetainedAtLeast": "30",
-        "ActiveUsers": "0.95"
-    }
-    
-    # Обновляем модалку
-    updated_view = body["view"]
-    updated_view["blocks"][4]["element"]["placeholder"]["text"] = value_placeholder.get(selected_type, "Введите значение")
-    updated_view["blocks"][4]["hint"]["text"] = value_hint.get(selected_type, "Введите значение для сегмента")
-    
-    client.views_update(
-        view_id=view_id,
-        view=updated_view
-    )
+    try:
+        # Получаем текущие значения
+        view_id = body["view"]["id"]
+        selected_type = body["actions"][0]["selected_option"]["value"]
+        
+        # Обновляем hint для поля значения в зависимости от типа
+        value_hint = {
+            "RetainedAtLeast": "Число дней удержания (например, 7, 14, 30)",
+            "ActiveUsers": "Доля активных пользователей от 0 до 1 (например, 0.80, 0.95)"
+        }
+        
+        value_placeholder = {
+            "RetainedAtLeast": "30",
+            "ActiveUsers": "0.95"
+        }
+        
+        # Обновляем модалку
+        updated_view = body["view"]
+        updated_view["blocks"][4]["element"]["placeholder"]["text"] = value_placeholder.get(selected_type, "Введите значение")
+        updated_view["blocks"][4]["hint"]["text"] = value_hint.get(selected_type, "Введите значение для сегмента")
+        
+        client.views_update(
+            view_id=view_id,
+            view=updated_view
+        )
+    except Exception as e:
+        logger.error(f"❌ Ошибка при обновлении типа: {e}")
 
 # Обработчик изменений в других полях для preview
 @bolt_app.action(re.compile("title_input|country_input|value_input"))
@@ -342,7 +395,7 @@ def handle_field_changes(ack, body, client):
     except Exception as e:
         logger.warning(f"Error updating preview: {e}")
 
-# Обработчик сабмита модалки
+# Обработчик сабмита модалки с асинхронным созданием сегмента
 @bolt_app.view("create_segment_modal")
 def handle_segment_submission(ack, body, client):
     values = body["view"]["state"]["values"]
@@ -393,47 +446,77 @@ def handle_segment_submission(ack, body, client):
         ack(response_action="errors", errors=errors)
         return
     
+    # МГНОВЕННО закрываем модалку
     ack()
     
-    # Генерируем имя сегмента
-    try:
-        if seg_type == "RetainedAtLeast":
-            val = int(raw_val)
-            code = str(val)
-        else:
-            val = float(raw_val)
-            code = raw_val.split('.')[-1] if '.' in raw_val else raw_val
+    # Создаем сегмент в фоновом режиме
+    def create_segment_async():
+        try:
+            logger.info(f"🎯 Начинаем создание сегмента: {title}, {country}, {seg_type}, {raw_val}")
             
-        name = f"bloom_{title}_{country}_{code}".lower()
+            # Проверяем авторизацию
+            if not lazy_login():
+                msg = "❌ *Ошибка авторизации в AppGrowth*\n🔧 Попробуйте позже или обратитесь к администратору"
+            else:
+                # Генерируем имя сегмента
+                if seg_type == "RetainedAtLeast":
+                    val = int(raw_val)
+                    code = str(val)
+                else:
+                    val = float(raw_val)
+                    code = raw_val.split('.')[-1] if '.' in raw_val else raw_val
+                    
+                name = f"bloom_{title}_{country}_{code}".lower()
+                
+                # Создаем сегмент
+                ok = appgrowth.create_segment(
+                    name=name,
+                    title=title,
+                    app=title,
+                    country=country,
+                    audience=val if seg_type == "ActiveUsers" else None,
+                    seg_type=seg_type
+                )
+                
+                if ok:
+                    msg = f"✅ *Сегмент успешно создан!*\n🎯 Имя: `{name}`\n📱 App: `{title}`\n🌍 Страна: `{country}`\n📊 Тип: `{seg_type}`\n🎯 Значение: `{raw_val}`"
+                    logger.info(f"✅ Сегмент создан: {name}")
+                else:
+                    msg = f"❌ *Не удалось создать сегмент*\n🔧 Проверьте параметры и попробуйте снова"
+                    logger.error(f"❌ Не удалось создать сегмент: {name}")
+                    
+        except Exception as e:
+            logger.error(f"❌ Ошибка создания сегмента: {e}")
+            msg = f"❌ *Ошибка при создании:* {e}"
         
-        # Создаем сегмент
-        ok = appgrowth.create_segment(
-            name=name,
-            title=title,
-            app=title,
-            country=country,
-            audience=val if seg_type == "ActiveUsers" else None,
-            seg_type=seg_type
+        # Отправляем результат пользователю
+        user = body["user"]["id"]
+        client.chat_postEphemeral(
+            channel=body["view"]["private_metadata"], 
+            user=user, 
+            text=msg,
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": msg}
+                }
+            ]
         )
-        
-        if ok:
-            msg = f"✅ *Сегмент успешно создан!*\n🎯 Имя: `{name}`\n📱 App: `{title}`\n🌍 Страна: `{country}`\n📊 Тип: `{seg_type}`\n🎯 Значение: `{raw_val}`"
-        else:
-            msg = f"❌ *Не удалось создать сегмент*\n🔧 Проверьте параметры и попробуйте снова"
-            
-    except Exception as e:
-        logger.error(f"Error creating segment: {e}")
-        msg = f"❌ *Ошибка при создании:* {e}"
     
+    # Запускаем создание сегмента в отдельном потоке
+    thread = threading.Thread(target=create_segment_async, daemon=True)
+    thread.start()
+    
+    # Сразу отправляем уведомление о том, что начали процесс
     user = body["user"]["id"]
     client.chat_postEphemeral(
-        channel=body["view"]["private_metadata"], 
-        user=user, 
-        text=msg,
+        channel=body["view"]["private_metadata"],
+        user=user,
+        text="🔄 *Создание сегмента...*\nПодождите, это может занять несколько секунд.",
         blocks=[
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": msg}
+                "text": {"type": "mrkdwn", "text": "🔄 *Создание сегмента...*\nПодождите, это может занять несколько секунд."}
             }
         ]
     )
@@ -446,6 +529,16 @@ handler = SlackRequestHandler(bolt_app)
 def slack_events():
     return handler.handle(request)
 
+@flask_app.route("/health", methods=["GET"])
+def health_check():
+    auth_status = "connected" if AUTH_STATUS["logged_in"] else "connecting" if AUTH_STATUS["in_progress"] else "disconnected"
+    return {
+        "status": "ok",
+        "appgrowth_auth": auth_status,
+        "timestamp": time.time()
+    }
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
+    logger.info(f"🚀 Запуск бота на порту {port}")
     flask_app.run(host="0.0.0.0", port=port)
