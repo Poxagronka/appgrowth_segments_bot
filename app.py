@@ -1,4 +1,4 @@
-# app.py — Slack-бот для работы с AppGrowth (полная исправленная версия)
+# app.py — Slack-бот для работы с AppGrowth (финальная версия)
 import os
 import re
 import logging
@@ -22,25 +22,6 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
-
-# Популярные App ID для автокомплита
-POPULAR_APP_IDS = [
-    "com.easybrain.number.puzzle.game",
-    "com.pixel.art.coloring.color.number", 
-    "com.king.candycrushsaga",
-    "com.supercell.clashofclans",
-    "com.tencent.ig",
-    "com.facebook.katana",
-    "com.whatsapp",
-    "com.instagram.android",
-    "com.spotify.music",
-    "com.netflix.mediaclient",
-    "com.google.android.apps.maps",
-    "com.twitter.android",
-    "com.skype.raider",
-    "com.viber.voip",
-    "com.snapchat.android"
-]
 
 # Популярные страны с кодами
 POPULAR_COUNTRIES = [
@@ -186,7 +167,7 @@ def handle_appgrowth(ack, respond, command):
         ]
     )
 
-# Обработчик кнопки «Новый сегмент» — ИСПРАВЛЕННАЯ ВЕРСИЯ
+# Обработчик кнопки «Новый сегмент» с простым текстовым полем
 @bolt_app.action("new_segment_btn")
 def open_segment_modal(ack, body, client):
     # МГНОВЕННО отвечаем Slack'у
@@ -234,7 +215,7 @@ def open_segment_modal(ack, body, client):
                 "title": {"type": "plain_text", "text": "🎯 Новый сегмент"},
                 "submit": {"type": "plain_text", "text": "Создать"},
                 "close": {"type": "plain_text", "text": "Отмена"},
-                "private_metadata": channel_id,  # Используем найденный channel_id
+                "private_metadata": channel_id,
                 "blocks": [
                     {
                         "type": "section",
@@ -248,13 +229,12 @@ def open_segment_modal(ack, body, client):
                         "type": "input",
                         "block_id": "title_block",
                         "element": {
-                            "type": "external_select",
+                            "type": "plain_text_input",
                             "action_id": "title_input",
-                            "placeholder": {"type": "plain_text", "text": "Выберите или введите App ID"},
-                            "min_query_length": 3
+                            "placeholder": {"type": "plain_text", "text": "com.easybrain.number.puzzle.game"}
                         },
-                        "label": {"type": "plain_text", "text": "📱 App ID"},
-                        "hint": {"type": "plain_text", "text": "Bundle ID приложения, например com.easybrain.number.puzzle.game"}
+                        "label": {"type": "plain_text", "text": "📱 App ID (Bundle ID)"},
+                        "hint": {"type": "plain_text", "text": "Введите или вставьте Bundle ID приложения"}
                     },
                     {
                         "type": "input",
@@ -315,29 +295,6 @@ def open_segment_modal(ack, body, client):
         logger.error(f"❌ Ошибка при открытии модалки: {e}")
         logger.error(f"📊 Body для отладки: {body}")
 
-# Обработчик автокомплита для App ID
-@bolt_app.options("title_input")
-def handle_app_id_options(ack, body):
-    query = body.get("value", "").lower()
-    
-    # Фильтруем популярные App ID по запросу
-    filtered_options = []
-    for app_id in POPULAR_APP_IDS:
-        if query in app_id.lower():
-            filtered_options.append({
-                "text": {"type": "plain_text", "text": app_id},
-                "value": app_id
-            })
-    
-    # Добавляем возможность создать новый App ID если его нет в списке
-    if query and len(query) > 5 and not any(query in app.lower() for app in POPULAR_APP_IDS):
-        filtered_options.insert(0, {
-            "text": {"type": "plain_text", "text": f"📝 Использовать: {query}"},
-            "value": query
-        })
-    
-    ack(options=filtered_options[:10])  # Максимум 10 опций
-
 # Обработчик изменений в модалке для динамического preview
 @bolt_app.action("type_select")
 def handle_type_change(ack, body, client):
@@ -371,7 +328,7 @@ def handle_type_change(ack, body, client):
     except Exception as e:
         logger.error(f"❌ Ошибка при обновлении типа: {e}")
 
-# Обработчик изменений в других полях для preview
+# Обработчик изменений в полях для preview
 @bolt_app.action(re.compile("title_input|country_input|value_input"))
 def handle_field_changes(ack, body, client):
     ack()
@@ -386,8 +343,9 @@ def handle_field_changes(ack, body, client):
         value = ""
         seg_type = "ActiveUsers"  # default
         
-        if "title_block" in values and values["title_block"]["title_input"]["selected_option"]:
-            title = values["title_block"]["title_input"]["selected_option"]["value"]
+        # Title теперь обычное текстовое поле
+        if "title_block" in values and values["title_block"]["title_input"]["value"]:
+            title = values["title_block"]["title_input"]["value"]
         
         if "country_block" in values and values["country_block"]["country_input"]["selected_option"]:
             country = values["country_block"]["country_input"]["selected_option"]["value"]
@@ -426,7 +384,7 @@ def handle_field_changes(ack, body, client):
     except Exception as e:
         logger.warning(f"Error updating preview: {e}")
 
-# Обработчик сабмита модалки — ИСПРАВЛЕННАЯ ВЕРСИЯ
+# Обработчик сабмита модалки с текстовым полем App ID
 @bolt_app.view("create_segment_modal")
 def handle_segment_submission(ack, body, client):
     logger.info("🔥 НАЧАЛО: Обработка сабмита модалки")
@@ -435,12 +393,9 @@ def handle_segment_submission(ack, body, client):
         values = body["view"]["state"]["values"]
         logger.info(f"📊 Получены значения из модалки")
         
-        # Извлекаем значения с более безопасным способом
+        # Извлекаем значения - title теперь обычное текстовое поле
         title_data = values.get("title_block", {}).get("title_input", {})
-        if title_data.get("selected_option"):
-            title = title_data["selected_option"]["value"].strip()
-        else:
-            title = ""
+        title = title_data.get("value", "").strip() if title_data.get("value") else ""
         
         country_data = values.get("country_block", {}).get("country_input", {})
         if country_data.get("selected_option"):
@@ -463,7 +418,9 @@ def handle_segment_submission(ack, body, client):
         errors = {}
         
         if not title:
-            errors["title_block"] = "Выберите App ID"
+            errors["title_block"] = "Введите Bundle ID приложения"
+        elif len(title) < 5:
+            errors["title_block"] = "Bundle ID слишком короткий"
         
         if not country:
             errors["country_block"] = "Выберите страну"
