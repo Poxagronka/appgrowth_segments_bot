@@ -90,15 +90,28 @@ def _find_csrf(html: str) -> Optional[str]:
     )
     return m.group(1) if m else None
 
-# ───────── создание сегмента ─────────
+# ───────── создание сегмента (ИСПРАВЛЕНО) ─────────
 def create_segment(
     name: str,
     title: str,
     app: str,
     country: str,
-    audience: float = 0.95,
+    value: float = 0.95,
     seg_type: str = "ActiveUsers",
 ) -> bool:
+    """
+    Создает сегмент в AppGrowth
+    
+    Args:
+        name: Имя сегмента
+        title: Заголовок
+        app: ID приложения  
+        country: Код страны (USA, THA, etc.)
+        value: Значение - для ActiveUsers: ratio (0.95), для RetainedAtLeast: дни (30)
+        seg_type: Тип сегмента ("ActiveUsers" или "RetainedAtLeast")
+    """
+    print(f"🎯 Creating segment: {name}, type: {seg_type}, value: {value}")
+    
     # 1) GET /segments/new  → CSRF
     r = SESSION.get(f"{BASE}/segments/new", timeout=10)
     r.raise_for_status()
@@ -106,23 +119,38 @@ def create_segment(
     if not csrf:
         raise RuntimeError("CSRF token не найден на /segments/new")
 
-    # 2) payload
+    # 2) Подготовка options в зависимости от типа сегмента
+    if seg_type == "RetainedAtLeast":
+        # Для RetainedAtLeast используем "age" (количество дней)
+        options = {
+            "age": str(int(value)),
+            "app": app,
+            "flavor": "uid",
+            "country": country,
+        }
+    else:  # ActiveUsers
+        # Для ActiveUsers используем "audience" (соотношение)
+        options = {
+            "app": app,
+            "flavor": "uid", 
+            "country": country,
+            "audience": f"{value:.2f}",
+        }
+    
+    print(f"🔧 Options: {options}")
+
+    # 3) payload
     payload = {
         "csrf_token": csrf,
         "name": name,
         "title": title,
         "type": seg_type,
-        "options": json.dumps(
-            {
-                "app": app,
-                "flavor": "uid",
-                "country": country,
-                "audience": f"{audience:.2f}",
-            }
-        ),
+        "options": json.dumps(options),
     }
+    
+    print(f"📤 Payload: {payload}")
 
-    # 3) POST /segments/
+    # 4) POST /segments/
     res = SESSION.post(
         f"{BASE}/segments/",
         data=payload,
@@ -130,4 +158,11 @@ def create_segment(
         allow_redirects=False,
         timeout=15,
     )
-    return res.status_code == 302
+    
+    success = res.status_code == 302
+    print(f"📊 Response status: {res.status_code}, success: {success}")
+    
+    if not success:
+        print(f"❌ Response text: {res.text[:500]}...")
+    
+    return success
