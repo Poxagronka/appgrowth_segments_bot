@@ -46,16 +46,25 @@ POPULAR_COUNTRIES = [
     {"text": {"type": "plain_text", "text": "🇦🇺 AUS"}, "value": "AUS"}
 ]
 
-# Segment types  
+# Segment types - only 5 options
 SEGMENT_TYPES = [
+    {"text": {"type": "plain_text", "text": "⏱️ Retained 1 day"}, "value": "RetainedAtLeast_1"},
     {"text": {"type": "plain_text", "text": "⏱️ Retained 7 days"}, "value": "RetainedAtLeast_7"},
-    {"text": {"type": "plain_text", "text": "⏱️ Retained 14 days"}, "value": "RetainedAtLeast_14"},
     {"text": {"type": "plain_text", "text": "⏱️ Retained 30 days"}, "value": "RetainedAtLeast_30"},
-    {"text": {"type": "plain_text", "text": "👥 Active Users 60%"}, "value": "ActiveUsers_0.60"},
-    {"text": {"type": "plain_text", "text": "👥 Active Users 70%"}, "value": "ActiveUsers_0.70"},
     {"text": {"type": "plain_text", "text": "👥 Active Users 80%"}, "value": "ActiveUsers_0.80"},
-    {"text": {"type": "plain_text", "text": "👥 Active Users 90%"}, "value": "ActiveUsers_0.90"},
     {"text": {"type": "plain_text", "text": "👥 Active Users 95%"}, "value": "ActiveUsers_0.95"}
+]
+
+# Value options for single segment creation
+ACTIVE_USERS_VALUES = [
+    {"text": {"type": "plain_text", "text": "80% (0.80)"}, "value": "0.80"},
+    {"text": {"type": "plain_text", "text": "95% (0.95)"}, "value": "0.95"}
+]
+
+RETAINED_VALUES = [
+    {"text": {"type": "plain_text", "text": "1 day"}, "value": "1"},
+    {"text": {"type": "plain_text", "text": "7 days"}, "value": "7"},
+    {"text": {"type": "plain_text", "text": "30 days"}, "value": "30"}
 ]
 
 # Simple auth
@@ -167,7 +176,50 @@ def handle_appgrowth_command(ack, respond, command, say):
         logger.error(f"❌ Command error: {e}")
         respond({"response_type": "ephemeral", "text": f"Error: {e}"})
 
-# Button handlers
+# Type change handler for single segment modal
+@bolt_app.action("type_select")
+def handle_type_change(ack, body, client):
+    ack()
+    
+    logger.info("🔄 Type selection changed")
+    
+    try:
+        view_id = body["view"]["id"]
+        selected_type = body["actions"][0]["selected_option"]["value"]
+        
+        logger.info(f"📊 Selected type: {selected_type}")
+        
+        # Choose options based on selected type
+        if selected_type == "RetainedAtLeast":
+            value_options = RETAINED_VALUES
+            placeholder = "Select retention days"
+        else:  # ActiveUsers
+            value_options = ACTIVE_USERS_VALUES  
+            placeholder = "Select active users %"
+        
+        # Update the modal
+        updated_view = body["view"]
+        updated_view["blocks"][3]["element"]["options"] = value_options
+        updated_view["blocks"][3]["element"]["placeholder"]["text"] = placeholder
+        # Reset selected value
+        if "selected_option" in updated_view["blocks"][3]["element"]:
+            del updated_view["blocks"][3]["element"]["selected_option"]
+        
+        client.views_update(
+            view_id=view_id,
+            view=updated_view
+        )
+        
+        logger.info("✅ Modal updated with new value options")
+        
+    except Exception as e:
+        logger.error(f"❌ Error updating modal: {e}")
+
+# Handle value selection for single segments
+@bolt_app.action("value_select")
+def handle_value_select(ack, body):
+    ack()
+    # Just acknowledge, no special handling needed
 @bolt_app.action("new_segment_btn")
 def handle_new_segment_button(ack, body, client):
     ack()
@@ -227,9 +279,10 @@ def handle_new_segment_button(ack, body, client):
                         "type": "input",
                         "block_id": "value_block",
                         "element": {
-                            "type": "plain_text_input",
-                            "action_id": "value_input",
-                            "placeholder": {"type": "plain_text", "text": "0.95 or 30"}
+                            "type": "static_select",
+                            "action_id": "value_select",
+                            "placeholder": {"type": "plain_text", "text": "Select value"},
+                            "options": ACTIVE_USERS_VALUES  # Default to ActiveUsers
                         },
                         "label": {"type": "plain_text", "text": "Value"}
                     }
@@ -317,11 +370,12 @@ def handle_segment_modal(ack, body, client):
         country = country_data.get("selected_option", {}).get("value", "")
         seg_type_data = values.get("type_block", {}).get("type_select", {})
         seg_type = seg_type_data.get("selected_option", {}).get("value", "")
-        raw_val = values.get("value_block", {}).get("value_input", {}).get("value", "").strip()
+        value_data = values.get("value_block", {}).get("value_select", {})
+        raw_val = value_data.get("selected_option", {}).get("value", "")
         
         logger.info(f"📱 Modal data: title='{title}', country='{country}', type='{seg_type}', value='{raw_val}'")
         
-        # Validation
+        # Validation - simplified since values come from select
         errors = {}
         if not title:
             errors["title_block"] = "Required"
@@ -331,18 +385,6 @@ def handle_segment_modal(ack, body, client):
             errors["type_block"] = "Required"
         if not raw_val:
             errors["value_block"] = "Required"
-        else:
-            try:
-                if seg_type == "RetainedAtLeast":
-                    val = int(raw_val)
-                    if val < 1 or val > 365:
-                        errors["value_block"] = "Days: 1-365"
-                else:  # ActiveUsers
-                    val = float(raw_val)
-                    if val <= 0 or val > 1:
-                        errors["value_block"] = "Ratio: 0.01-1.0"
-            except ValueError:
-                errors["value_block"] = "Invalid number"
         
         if errors:
             logger.warning(f"❌ Validation errors: {errors}")
