@@ -398,11 +398,17 @@ def handle_multiple_segments_submission(ack, body, client):
                         msg += f"✅ *Created ({success_count}):*\n" + "\n".join([f"• `{name}`" for name in created_segments[:10]])
                         if len(created_segments) > 10:
                             msg += f"\n... and {len(created_segments) - 10} more"
-                        msg += f"\n\n❌ *Failed ({fail_count}):* probably already exist or invalid parameters"
-                    else:
-                        msg += f"❌ Failed: {fail_count} (probably already exist)"
+                    if failed_segments:
+                        msg += f"\n\n❌ *Failed ({fail_count}):*\n" + "\n".join([f"• `{name}`" for name in failed_segments[:10]])
+                        if len(failed_segments) > 10:
+                            msg += f"\n... and {len(failed_segments) - 10} more"
                 else:
-                    msg = f"❌ *Failed to create any segments ({total_segments} total)*\n🔧 Possible reasons:\n• Segments already exist\n• Invalid app ID\n• Server errors"
+                    msg = f"❌ *Failed to create any segments ({total_segments} total)*\n\n"
+                    if failed_segments:
+                        msg += f"📋 *Failed segments:*\n" + "\n".join([f"• `{name}`" for name in failed_segments[:20]])
+                        if len(failed_segments) > 20:
+                            msg += f"\n... and {len(failed_segments) - 20} more"
+                    msg += f"\n\n🔧 *Possible reasons:*\n• Segments already exist\n• Invalid app ID\n• Server errors"
                 
                 client.chat_postEphemeral(
                     channel=channel_id,
