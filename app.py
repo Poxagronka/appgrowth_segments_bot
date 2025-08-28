@@ -33,21 +33,25 @@ logger.info(f"🔑 Token: {SLACK_BOT_TOKEN[:10]}... Secret: {SLACK_SIGNING_SECRE
 # Countries
 POPULAR_COUNTRIES = [
     {"text": {"type": "plain_text", "text": "🇺🇸 USA - United States"}, "value": "USA"},
-    {"text": {"type": "plain_text", "text": "🇹🇭 THA - Thailand"}, "value": "THA"},
-    {"text": {"type": "plain_text", "text": "🇳🇱 NLD - Netherlands"}, "value": "NLD"},
-    {"text": {"type": "plain_text", "text": "🇩🇪 DEU - Germany"}, "value": "DEU"},
-    {"text": {"type": "plain_text", "text": "🇫🇷 FRA - France"}, "value": "FRA"},
-    {"text": {"type": "plain_text", "text": "🇬🇧 GBR - United Kingdom"}, "value": "GBR"},
-    {"text": {"type": "plain_text", "text": "🇯🇵 JPN - Japan"}, "value": "JPN"},
-    {"text": {"type": "plain_text", "text": "🇰🇷 KOR - Korea"}, "value": "KOR"},
-    {"text": {"type": "plain_text", "text": "🇧🇷 BRA - Brazil"}, "value": "BRA"},
-    {"text": {"type": "plain_text", "text": "🇮🇳 IND - India"}, "value": "IND"},
-    {"text": {"type": "plain_text", "text": "🇨🇦 CAN - Canada"}, "value": "CAN"},
     {"text": {"type": "plain_text", "text": "🇦🇺 AUS - Australia"}, "value": "AUS"},
     {"text": {"type": "plain_text", "text": "🇲🇽 MEX - Mexico"}, "value": "MEX"},
-    {"text": {"type": "plain_text", "text": "🇪🇸 ESP - Spain"}, "value": "ESP"},
+    {"text": {"type": "plain_text", "text": "🇰🇷 KOR - Korea"}, "value": "KOR"},
+    {"text": {"type": "plain_text", "text": "🇩🇪 DEU - Germany"}, "value": "DEU"},
     {"text": {"type": "plain_text", "text": "🇮🇹 ITA - Italy"}, "value": "ITA"},
-    {"text": {"type": "plain_text", "text": "🇷🇺 RUS - Russia"}, "value": "RUS"}
+    {"text": {"type": "plain_text", "text": "🇯🇵 JPN - Japan"}, "value": "JPN"},
+    {"text": {"type": "plain_text", "text": "🇨🇦 CAN - Canada"}, "value": "CAN"},
+    {"text": {"type": "plain_text", "text": "🇬🇧 GBR - United Kingdom"}, "value": "GBR"},
+    {"text": {"type": "plain_text", "text": "🇧🇷 BRA - Brazil"}, "value": "BRA"},
+    {"text": {"type": "plain_text", "text": "🇫🇷 FRA - France"}, "value": "FRA"},
+    {"text": {"type": "plain_text", "text": "🇪🇸 ESP - Spain"}, "value": "ESP"},
+    {"text": {"type": "plain_text", "text": "🇳🇱 NLD - Netherlands"}, "value": "NLD"},
+    {"text": {"type": "plain_text", "text": "🇨🇭 CHE - Switzerland"}, "value": "CHE"},
+    {"text": {"type": "plain_text", "text": "🇦🇹 AUT - Austria"}, "value": "AUT"},
+    {"text": {"type": "plain_text", "text": "🇦🇷 ARG - Argentina"}, "value": "ARG"},
+    {"text": {"type": "plain_text", "text": "🇮🇳 IND - India"}, "value": "IND"},
+    {"text": {"type": "plain_text", "text": "🇨🇱 CHL - Chile"}, "value": "CHL"},
+    {"text": {"type": "plain_text", "text": "🇨🇴 COL - Colombia"}, "value": "COL"},
+    {"text": {"type": "plain_text", "text": "🇧🇪 BEL - Belgium"}, "value": "BEL"}
 ]
 
 # Segment types - only 5 options
@@ -232,7 +236,7 @@ def open_multiple_segments_modal(ack, body, client):
                             "action_id": "countries_input",
                             "placeholder": {"type": "plain_text", "text": "Select countries"},
                             "options": POPULAR_COUNTRIES,
-                            "max_selected_items": 10
+                            "max_selected_items": 20
                         },
                         "label": {"type": "plain_text", "text": "🌍 Countries"},
                         "hint": {"type": "plain_text", "text": "Select multiple countries for targeting"}
