@@ -86,9 +86,9 @@ def generate_segment_name(app_id, country, seg_type, value):
             value = float(value)
         code = str(int(value * 100))
     
-    # Make country uppercase, keep app_id and code lowercase
+    # Make country uppercase, keep app_id as is, code lowercase
     country = country.upper()
-    app_id = app_id.lower()
+    # app_id keeps original case - removed .lower()
     code = code.lower()
     
     return f"bloom_{app_id}_{country}_{code}"
