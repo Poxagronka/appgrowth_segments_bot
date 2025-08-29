@@ -51,7 +51,8 @@ POPULAR_COUNTRIES = [
     {"text": {"type": "plain_text", "text": "🇮🇳 IND - India"}, "value": "IND"},
     {"text": {"type": "plain_text", "text": "🇨🇱 CHL - Chile"}, "value": "CHL"},
     {"text": {"type": "plain_text", "text": "🇨🇴 COL - Colombia"}, "value": "COL"},
-    {"text": {"type": "plain_text", "text": "🇧🇪 BEL - Belgium"}, "value": "BEL"}
+    {"text": {"type": "plain_text", "text": "🇧🇪 BEL - Belgium"}, "value": "BEL"},
+    {"text": {"type": "plain_text", "text": "🇷🇺 RUS - Russia"}, "value": "RUS"}
 ]
 
 # Segment types - only 5 options
