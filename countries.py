@@ -53,6 +53,7 @@ POPULAR_COUNTRIES = [
     # Tier 3 - Emerging Markets
     {"text": {"type": "plain_text", "text": "🇵🇪 PER - Peru"}, "value": "PER"},
     {"text": {"type": "plain_text", "text": "🇪🇨 ECU - Ecuador"}, "value": "ECU"},
+    {"text": {"type": "plain_text", "text": "🇻🇪 VEN - Venezuela"}, "value": "VEN"},
     {"text": {"type": "plain_text", "text": "🇺🇾 URY - Uruguay"}, "value": "URY"},
     {"text": {"type": "plain_text", "text": "🇵🇾 PRY - Paraguay"}, "value": "PRY"},
     {"text": {"type": "plain_text", "text": "🇨🇷 CRI - Costa Rica"}, "value": "CRI"},
