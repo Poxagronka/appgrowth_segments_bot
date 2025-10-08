@@ -57,19 +57,20 @@ def try_login():
         return False
 
 def parse_bulk_countries(bulk_text):
-    """Parse bulk country codes from text input"""
+    """Parse bulk country codes from text input (supports newlines, commas, and spaces)"""
     if not bulk_text or not bulk_text.strip():
         return []
 
     # Create a set of valid country codes from POPULAR_COUNTRIES
     valid_codes = {country["value"] for country in POPULAR_COUNTRIES}
 
-    # Split by newlines and clean up
-    lines = bulk_text.strip().split('\n')
-    parsed_codes = []
+    # Replace commas with spaces, then split by any whitespace
+    text = bulk_text.replace(',', ' ')
+    codes = text.split()
 
-    for line in lines:
-        code = line.strip().upper()
+    parsed_codes = []
+    for code in codes:
+        code = code.strip().upper()
         if code and code in valid_codes:
             parsed_codes.append(code)
 
@@ -247,10 +248,10 @@ def open_multiple_segments_modal(ack, body, client):
                             "type": "plain_text_input",
                             "action_id": "bulk_countries_input",
                             "multiline": True,
-                            "placeholder": {"type": "plain_text", "text": "ARE\\nZAF\\nJAM\\nISR\\nVNM\\nUKR"}
+                            "placeholder": {"type": "plain_text", "text": "ARE ZAF ISR or ARE, ZAF, ISR"}
                         },
                         "label": {"type": "plain_text", "text": "🌍 Countries (Option 2: Bulk Text)"},
-                        "hint": {"type": "plain_text", "text": "Paste country codes, one per line (e.g., ARE, ZAF, ISR)"}
+                        "hint": {"type": "plain_text", "text": "Paste country codes: one per line, with spaces, or with commas"}
                     },
                     {
                         "type": "input",
