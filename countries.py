@@ -1,4 +1,4 @@
-# countries.py - Top 99 countries for AppGrowth bot (Slack multi_select limit)
+# countries.py - Top 100 countries for AppGrowth bot (Slack multi_select limit)
 
 POPULAR_COUNTRIES = [
     # Tier 1 - Major Markets (21)
@@ -50,7 +50,7 @@ POPULAR_COUNTRIES = [
     {"text": {"type": "plain_text", "text": "🇸🇦 SAU - Saudi Arabia"}, "value": "SAU"},
     {"text": {"type": "plain_text", "text": "🇮🇱 ISR - Israel"}, "value": "ISR"},
 
-    # Tier 3 - Emerging Markets (47)
+    # Tier 3 - Emerging Markets (48)
     {"text": {"type": "plain_text", "text": "🇵🇪 PER - Peru"}, "value": "PER"},
     {"text": {"type": "plain_text", "text": "🇪🇨 ECU - Ecuador"}, "value": "ECU"},
     {"text": {"type": "plain_text", "text": "🇻🇪 VEN - Venezuela"}, "value": "VEN"},
@@ -98,6 +98,7 @@ POPULAR_COUNTRIES = [
     {"text": {"type": "plain_text", "text": "🇱🇺 LUX - Luxembourg"}, "value": "LUX"},
     {"text": {"type": "plain_text", "text": "🇲🇹 MLT - Malta"}, "value": "MLT"},
     {"text": {"type": "plain_text", "text": "🇨🇾 CYP - Cyprus"}, "value": "CYP"},
+    {"text": {"type": "plain_text", "text": "🇵🇷 PRI - Puerto Rico"}, "value": "PRI"},
 
     # Tier 4 - Additional Major Markets (7)
     {"text": {"type": "plain_text", "text": "🇨🇳 CHN - China"}, "value": "CHN"},
