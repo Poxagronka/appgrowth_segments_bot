@@ -228,6 +228,10 @@ def open_multiple_segments_modal(ack, body, client):
                         "hint": {"type": "plain_text", "text": "Enter the application Bundle ID"}
                     },
                     {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "*🌍 Countries*"}
+                    },
+                    {
                         "type": "input",
                         "block_id": "countries_block",
                         "optional": True,
@@ -238,8 +242,8 @@ def open_multiple_segments_modal(ack, body, client):
                             "options": POPULAR_COUNTRIES,
                             "max_selected_items": 20
                         },
-                        "label": {"type": "plain_text", "text": "🌍 Countries (Option 1: Dropdown)"},
-                        "hint": {"type": "plain_text", "text": "Select multiple countries or use bulk text below"}
+                        "label": {"type": "plain_text", "text": "Dropdown"},
+                        "hint": {"type": "plain_text", "text": "Select multiple countries from list"}
                     },
                     {
                         "type": "input",
@@ -251,8 +255,12 @@ def open_multiple_segments_modal(ack, body, client):
                             "multiline": True,
                             "placeholder": {"type": "plain_text", "text": "ARE ZAF ISR or ARE, ZAF, ISR"}
                         },
-                        "label": {"type": "plain_text", "text": "🌍 Countries (Bulk Text)"},
+                        "label": {"type": "plain_text", "text": "Bulk Text"},
                         "hint": {"type": "plain_text", "text": "Paste country codes: one per line, with spaces, or with commas"}
+                    },
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "*📊 Segment Types*"}
                     },
                     {
                         "type": "input",
@@ -273,8 +281,8 @@ def open_multiple_segments_modal(ack, body, client):
                                 }
                             ]
                         },
-                        "label": {"type": "plain_text", "text": "📊 Segment Types"},
-                        "hint": {"type": "plain_text", "text": "Uncheck to manually select specific segment types"}
+                        "label": {"type": "plain_text", "text": "All Types"},
+                        "hint": {"type": "plain_text", "text": "Uncheck to manually select specific types"}
                     },
                     {
                         "type": "input",
@@ -287,8 +295,8 @@ def open_multiple_segments_modal(ack, body, client):
                             "options": SEGMENT_TYPES,
                             "max_selected_items": 5
                         },
-                        "label": {"type": "plain_text", "text": "📊 Manual Selection"},
-                        "hint": {"type": "plain_text", "text": "Only used when 'Create ALL' is unchecked above"}
+                        "label": {"type": "plain_text", "text": "Manual Selection"},
+                        "hint": {"type": "plain_text", "text": "Only used when 'All' is unchecked above"}
                     }
                 ]
             }
