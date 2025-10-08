@@ -56,6 +56,25 @@ def try_login():
         auth_logged_in = False
         return False
 
+def parse_bulk_countries(bulk_text):
+    """Parse bulk country codes from text input"""
+    if not bulk_text or not bulk_text.strip():
+        return []
+
+    # Create a set of valid country codes from POPULAR_COUNTRIES
+    valid_codes = {country["value"] for country in POPULAR_COUNTRIES}
+
+    # Split by newlines and clean up
+    lines = bulk_text.strip().split('\n')
+    parsed_codes = []
+
+    for line in lines:
+        code = line.strip().upper()
+        if code and code in valid_codes:
+            parsed_codes.append(code)
+
+    return parsed_codes
+
 def generate_segment_name(app_id, country, seg_type, value):
     """Generate segment name with UPPERCASE country code"""
     if seg_type == "RetainedAtLeast":
@@ -64,12 +83,12 @@ def generate_segment_name(app_id, country, seg_type, value):
         if isinstance(value, str):
             value = float(value)
         code = str(int(value * 100))
-    
+
     # Make country uppercase, keep app_id as is, code lowercase
     country = country.upper()
     # app_id keeps original case - removed .lower()
     code = code.lower()
-    
+
     return f"bloom_{app_id}_{country}_{code}"
 
 # Initialize Bolt app
@@ -217,21 +236,57 @@ def open_multiple_segments_modal(ack, body, client):
                             "options": POPULAR_COUNTRIES,
                             "max_selected_items": 20
                         },
-                        "label": {"type": "plain_text", "text": "🌍 Countries"},
-                        "hint": {"type": "plain_text", "text": "Select multiple countries for targeting"}
+                        "label": {"type": "plain_text", "text": "🌍 Countries (Option 1: Dropdown)"},
+                        "hint": {"type": "plain_text", "text": "Select multiple countries or use bulk text below"}
+                    },
+                    {
+                        "type": "input",
+                        "block_id": "bulk_countries_block",
+                        "optional": True,
+                        "element": {
+                            "type": "plain_text_input",
+                            "action_id": "bulk_countries_input",
+                            "multiline": True,
+                            "placeholder": {"type": "plain_text", "text": "ARE\\nZAF\\nJAM\\nISR\\nVNM\\nUKR"}
+                        },
+                        "label": {"type": "plain_text", "text": "🌍 Countries (Option 2: Bulk Text)"},
+                        "hint": {"type": "plain_text", "text": "Paste country codes, one per line (e.g., ARE, ZAF, ISR)"}
+                    },
+                    {
+                        "type": "input",
+                        "block_id": "all_segments_block",
+                        "element": {
+                            "type": "checkboxes",
+                            "action_id": "all_segments_input",
+                            "options": [
+                                {
+                                    "text": {"type": "plain_text", "text": "✅ Create ALL segment types (all 5 types)"},
+                                    "value": "all_segments"
+                                }
+                            ],
+                            "initial_options": [
+                                {
+                                    "text": {"type": "plain_text", "text": "✅ Create ALL segment types (all 5 types)"},
+                                    "value": "all_segments"
+                                }
+                            ]
+                        },
+                        "label": {"type": "plain_text", "text": "📊 Segment Types"},
+                        "hint": {"type": "plain_text", "text": "Uncheck to manually select specific segment types"}
                     },
                     {
                         "type": "input",
                         "block_id": "segment_types_block",
+                        "optional": True,
                         "element": {
                             "type": "multi_static_select",
                             "action_id": "segment_types_input",
-                            "placeholder": {"type": "plain_text", "text": "Select segment types"},
+                            "placeholder": {"type": "plain_text", "text": "Select specific segment types"},
                             "options": SEGMENT_TYPES,
                             "max_selected_items": 5
                         },
-                        "label": {"type": "plain_text", "text": "📊 Segment Types"},
-                        "hint": {"type": "plain_text", "text": "Select multiple segment types to create"}
+                        "label": {"type": "plain_text", "text": "📊 Manual Selection (if ALL unchecked)"},
+                        "hint": {"type": "plain_text", "text": "Only used when 'Create ALL' is unchecked above"}
                     }
                 ]
             }
@@ -241,7 +296,7 @@ def open_multiple_segments_modal(ack, body, client):
         logger.error(f"❌ Error opening multiple segments modal: {e}")
 
 # Handle form inputs to prevent warnings
-@bolt_app.action(re.compile("app_id_input|countries_input|segment_types_input"))
+@bolt_app.action(re.compile("app_id_input|countries_input|bulk_countries_input|all_segments_input|segment_types_input"))
 def handle_form_inputs(ack, body):
     ack()
     # Just acknowledge, no preview needed
@@ -253,30 +308,50 @@ def handle_multiple_segments_submission(ack, body, client):
     
     try:
         values = body["view"]["state"]["values"]
-        
+
         app_id_data = values.get("app_id_block", {}).get("app_id_input", {})
         app_id = app_id_data.get("value", "").strip() if app_id_data.get("value") else ""
-        
+
+        # Get countries from dropdown
         countries_data = values.get("countries_block", {}).get("countries_input", {})
-        countries = [opt["value"] for opt in countries_data.get("selected_options", [])]
-        
+        countries_dropdown = [opt["value"] for opt in countries_data.get("selected_options", [])]
+
+        # Get countries from bulk text
+        bulk_data = values.get("bulk_countries_block", {}).get("bulk_countries_input", {})
+        bulk_text = bulk_data.get("value", "") if bulk_data.get("value") else ""
+        countries_bulk = parse_bulk_countries(bulk_text)
+
+        # Merge and deduplicate countries
+        countries = list(set(countries_dropdown + countries_bulk))
+
+        # Check if "ALL segments" checkbox is selected
+        all_segments_data = values.get("all_segments_block", {}).get("all_segments_input", {})
+        all_segments_checked = len(all_segments_data.get("selected_options", [])) > 0
+
+        # Get manually selected segment types
         segment_types_data = values.get("segment_types_block", {}).get("segment_types_input", {})
-        segment_types = [opt["value"] for opt in segment_types_data.get("selected_options", [])]
-        
-        logger.info(f"📱 App ID: '{app_id}', 🌍 Countries: {countries}, 📊 Types: {segment_types}")
-        
+        segment_types_manual = [opt["value"] for opt in segment_types_data.get("selected_options", [])]
+
+        # If "ALL" is checked, use all 5 segment types
+        if all_segments_checked:
+            segment_types = [seg["value"] for seg in SEGMENT_TYPES]
+        else:
+            segment_types = segment_types_manual
+
+        logger.info(f"📱 App ID: '{app_id}', 🌍 Countries (dropdown): {countries_dropdown}, 🌍 Countries (bulk): {countries_bulk}, 🌍 Total: {countries}, ✅ ALL segments: {all_segments_checked}, 📊 Types: {segment_types}")
+
         errors = {}
-        
+
         if not app_id:
             errors["app_id_block"] = "Enter app Bundle ID"
         elif len(app_id) < 5:
             errors["app_id_block"] = "Bundle ID too short"
-        
+
         if not countries:
-            errors["countries_block"] = "Select at least one country"
-            
+            errors["countries_block"] = "Select countries from dropdown or enter bulk text"
+
         if not segment_types:
-            errors["segment_types_block"] = "Select at least one segment type"
+            errors["all_segments_block"] = "Check 'ALL segments' or select at least one segment type"
         
         if errors:
             logger.warning(f"❌ Multiple segments validation failed: {errors}")
