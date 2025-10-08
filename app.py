@@ -230,6 +230,7 @@ def open_multiple_segments_modal(ack, body, client):
                     {
                         "type": "input",
                         "block_id": "countries_block",
+                        "optional": True,
                         "element": {
                             "type": "multi_static_select",
                             "action_id": "countries_input",
@@ -250,7 +251,7 @@ def open_multiple_segments_modal(ack, body, client):
                             "multiline": True,
                             "placeholder": {"type": "plain_text", "text": "ARE ZAF ISR or ARE, ZAF, ISR"}
                         },
-                        "label": {"type": "plain_text", "text": "🌍 Countries (Option 2: Bulk Text)"},
+                        "label": {"type": "plain_text", "text": "🌍 Countries (Bulk Text)"},
                         "hint": {"type": "plain_text", "text": "Paste country codes: one per line, with spaces, or with commas"}
                     },
                     {
