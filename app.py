@@ -261,13 +261,13 @@ def open_multiple_segments_modal(ack, body, client):
                             "action_id": "all_segments_input",
                             "options": [
                                 {
-                                    "text": {"type": "plain_text", "text": "✅ Create ALL segment types (all 5 types)"},
+                                    "text": {"type": "plain_text", "text": "All"},
                                     "value": "all_segments"
                                 }
                             ],
                             "initial_options": [
                                 {
-                                    "text": {"type": "plain_text", "text": "✅ Create ALL segment types (all 5 types)"},
+                                    "text": {"type": "plain_text", "text": "All"},
                                     "value": "all_segments"
                                 }
                             ]
@@ -286,7 +286,7 @@ def open_multiple_segments_modal(ack, body, client):
                             "options": SEGMENT_TYPES,
                             "max_selected_items": 5
                         },
-                        "label": {"type": "plain_text", "text": "📊 Manual Selection (if ALL unchecked)"},
+                        "label": {"type": "plain_text", "text": "📊 Manual Selection"},
                         "hint": {"type": "plain_text", "text": "Only used when 'Create ALL' is unchecked above"}
                     }
                 ]
