@@ -61,9 +61,6 @@ def parse_bulk_countries(bulk_text):
     if not bulk_text or not bulk_text.strip():
         return []
 
-    # Create a set of valid country codes from POPULAR_COUNTRIES
-    valid_codes = {country["value"] for country in POPULAR_COUNTRIES}
-
     # Replace commas with spaces, then split by any whitespace
     text = bulk_text.replace(',', ' ')
     codes = text.split()
@@ -71,7 +68,7 @@ def parse_bulk_countries(bulk_text):
     parsed_codes = []
     for code in codes:
         code = code.strip().upper()
-        if code and code in valid_codes:
+        if code:
             parsed_codes.append(code)
 
     return parsed_codes
