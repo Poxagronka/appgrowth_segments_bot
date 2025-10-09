@@ -84,6 +84,31 @@ def parse_bulk_countries(bulk_text):
 
     return valid_codes, invalid_codes
 
+def parse_bulk_bundle_ids(bulk_text):
+    """
+    Parse bulk bundle IDs from text input (supports newlines, commas, and spaces).
+
+    Returns:
+        list: List of bundle IDs (stripped and deduplicated)
+    """
+    if not bulk_text or not bulk_text.strip():
+        return []
+
+    # Replace commas with spaces, then split by any whitespace
+    text = bulk_text.replace(',', ' ')
+    bundle_ids = text.split()
+
+    # Strip, remove empty strings, and deduplicate while preserving order
+    seen = set()
+    result = []
+    for bid in bundle_ids:
+        bid = bid.strip()
+        if bid and bid not in seen:
+            seen.add(bid)
+            result.append(bid)
+
+    return result
+
 def generate_segment_name(app_id, country, seg_type, value):
     """Generate segment name with UPPERCASE country code"""
     if seg_type == "RetainedAtLeast":
@@ -219,8 +244,8 @@ def open_multiple_segments_modal(ack, body, client):
                     {
                         "type": "section",
                         "text": {
-                            "type": "mrkdwn", 
-                            "text": "*🚀 Bulk Segment Creation*\nCreate multiple segments for one app across different countries and types:"
+                            "type": "mrkdwn",
+                            "text": "*🚀 Bulk Segment Creation*\nCreate multiple segments for one or more apps across different countries and types:"
                         }
                     },
                     {"type": "divider"},
@@ -230,10 +255,11 @@ def open_multiple_segments_modal(ack, body, client):
                         "element": {
                             "type": "plain_text_input",
                             "action_id": "app_id_input",
-                            "placeholder": {"type": "plain_text", "text": "com.easybrain.number.puzzle.game"}
+                            "multiline": True,
+                            "placeholder": {"type": "plain_text", "text": "com.easybrain.number.puzzle.game\ncom.example.another.app"}
                         },
                         "label": {"type": "plain_text", "text": "📱 App ID (Bundle ID)"},
-                        "hint": {"type": "plain_text", "text": "Enter the application Bundle ID"}
+                        "hint": {"type": "plain_text", "text": "Enter one or more Bundle IDs: one per line, with spaces, or with commas"}
                     },
                     {
                         "type": "section",
@@ -327,8 +353,10 @@ def handle_multiple_segments_submission(ack, body, client):
     try:
         values = body["view"]["state"]["values"]
 
+        # Get bundle IDs from input (now supports multiple)
         app_id_data = values.get("app_id_block", {}).get("app_id_input", {})
-        app_id = app_id_data.get("value", "").strip() if app_id_data.get("value") else ""
+        app_id_text = app_id_data.get("value", "").strip() if app_id_data.get("value") else ""
+        bundle_ids = parse_bulk_bundle_ids(app_id_text)
 
         # Get countries from dropdown
         countries_data = values.get("countries_block", {}).get("countries_input", {})
@@ -356,14 +384,17 @@ def handle_multiple_segments_submission(ack, body, client):
         else:
             segment_types = segment_types_manual
 
-        logger.info(f"📱 App ID: '{app_id}', 🌍 Countries (dropdown): {countries_dropdown}, 🌍 Countries (bulk valid): {countries_bulk_valid}, 🌍 Countries (bulk invalid): {countries_bulk_invalid}, 🌍 Total: {countries}, ✅ ALL segments: {all_segments_checked}, 📊 Types: {segment_types}")
+        logger.info(f"📱 Bundle IDs: {bundle_ids}, 🌍 Countries (dropdown): {countries_dropdown}, 🌍 Countries (bulk valid): {countries_bulk_valid}, 🌍 Countries (bulk invalid): {countries_bulk_invalid}, 🌍 Total: {countries}, ✅ ALL segments: {all_segments_checked}, 📊 Types: {segment_types}")
 
         errors = {}
 
-        if not app_id:
-            errors["app_id_block"] = "Enter app Bundle ID"
-        elif len(app_id) < 5:
-            errors["app_id_block"] = "Bundle ID too short"
+        if not bundle_ids:
+            errors["app_id_block"] = "Enter at least one Bundle ID"
+        else:
+            # Validate that each bundle ID is not too short
+            invalid_bundles = [bid for bid in bundle_ids if len(bid) < 5]
+            if invalid_bundles:
+                errors["app_id_block"] = f"Bundle IDs too short: {', '.join(invalid_bundles)}"
 
         # Check for invalid country codes in bulk input
         if countries_bulk_invalid:
@@ -386,17 +417,17 @@ def handle_multiple_segments_submission(ack, body, client):
         
         channel_id = body["view"]["private_metadata"]
         user_id = body["user"]["id"]
-        
-        total_segments = len(countries) * len(segment_types)
-        
+
+        total_segments = len(bundle_ids) * len(countries) * len(segment_types)
+
         client.chat_postEphemeral(
             channel=channel_id,
             user=user_id,
-            text=f"🔄 *Creating {total_segments} segments...*\nPlease wait, this may take a minute.",
+            text=f"🔄 *Creating {total_segments} segments...*\n📱 Apps: {len(bundle_ids)}, 🌍 Countries: {len(countries)}, 📊 Types: {len(segment_types)}\nPlease wait, this may take a minute.",
             blocks=[
                 {
                     "type": "section",
-                    "text": {"type": "mrkdwn", "text": f"🔄 *Creating {total_segments} segments...*\nPlease wait, this may take a minute."}
+                    "text": {"type": "mrkdwn", "text": f"🔄 *Creating {total_segments} segments...*\n📱 Apps: {len(bundle_ids)}, 🌍 Countries: {len(countries)}, 📊 Types: {len(segment_types)}\nPlease wait, this may take a minute."}
                 }
             ]
         )
@@ -416,61 +447,67 @@ def handle_multiple_segments_submission(ack, body, client):
                 created_segments = []
                 failed_segments = []
                 processed = 0
-                
-                for country in countries:
-                    for seg_type_value in segment_types:
-                        seg_type, value = seg_type_value.split("_")
-                        
-                        try:
-                            name = generate_segment_name(app_id, country, seg_type, value)
-                            logger.info(f"🎯 Creating segment: {name}")
-                            
-                            if seg_type == "RetainedAtLeast":
-                                val = int(value)
-                            else:  # ActiveUsers
-                                val = float(value)
-                            
-                            ok = appgrowth.create_segment(
-                                name=name,
-                                title=app_id,
-                                app=app_id,
-                                country=country,
-                                value=val,
-                                seg_type=seg_type
-                            )
-                            
-                            if ok:
-                                created_segments.append(name)
-                                logger.info(f"✅ Created: {name}")
-                            else:
-                                failed_segments.append(name)
-                                logger.error(f"❌ Failed: {name} (probably already exists or server error)")
-                                
-                        except Exception as e:
-                            failed_segments.append(f"{country}_{seg_type}_{value}")
-                            logger.error(f"❌ Exception creating {country}_{seg_type}_{value}: {e}")
-                        
-                        processed += 1
-                        # Send progress update every 5 segments
-                        if processed % 5 == 0:
+
+                for app_id in bundle_ids:
+                    logger.info(f"📱 Processing bundle ID: {app_id}")
+                    for country in countries:
+                        for seg_type_value in segment_types:
+                            seg_type, value = seg_type_value.split("_")
+
                             try:
-                                client.chat_postEphemeral(
-                                    channel=channel_id,
-                                    user=user_id,
-                                    text=f"🔄 Progress: {processed}/{total_segments} processed, {len(created_segments)} created so far..."
+                                name = generate_segment_name(app_id, country, seg_type, value)
+                                logger.info(f"🎯 Creating segment: {name}")
+
+                                if seg_type == "RetainedAtLeast":
+                                    val = int(value)
+                                else:  # ActiveUsers
+                                    val = float(value)
+
+                                ok = appgrowth.create_segment(
+                                    name=name,
+                                    title=app_id,
+                                    app=app_id,
+                                    country=country,
+                                    value=val,
+                                    seg_type=seg_type
                                 )
-                            except:
-                                pass
-                        
-                        time.sleep(0.5)
+
+                                if ok:
+                                    created_segments.append(name)
+                                    logger.info(f"✅ Created: {name}")
+                                else:
+                                    failed_segments.append(name)
+                                    logger.error(f"❌ Failed: {name} (probably already exists or server error)")
+
+                            except Exception as e:
+                                failed_segments.append(f"{app_id}_{country}_{seg_type}_{value}")
+                                logger.error(f"❌ Exception creating {app_id}_{country}_{seg_type}_{value}: {e}")
+
+                            processed += 1
+                            # Send progress update every 5 segments
+                            if processed % 5 == 0:
+                                try:
+                                    client.chat_postEphemeral(
+                                        channel=channel_id,
+                                        user=user_id,
+                                        text=f"🔄 Progress: {processed}/{total_segments} processed, {len(created_segments)} created so far..."
+                                    )
+                                except:
+                                    pass
+
+                            time.sleep(0.5)
                 
                 success_count = len(created_segments)
                 fail_count = len(failed_segments)
-                
+
+                apps_summary = f"📱 {len(bundle_ids)} app(s), 🌍 {len(countries)} country(ies), 📊 {len(segment_types)} type(s)"
+
                 if success_count > 0 and fail_count == 0:
-                    msg = f"🎉 *All {success_count} segments created successfully!*\n\n📋 Created segments:\n" + "\n".join([f"• `{name}`" for name in created_segments])
+                    msg = f"🎉 *All {success_count} segments created successfully!*\n{apps_summary}\n\n📋 Created segments:\n" + "\n".join([f"• `{name}`" for name in created_segments[:20]])
+                    if len(created_segments) > 20:
+                        msg += f"\n... and {len(created_segments) - 20} more"
                 elif success_count > 0 and fail_count > 0:
-                    msg = f"⚠️ *Partially completed: {success_count}/{total_segments} segments created*\n\n"
+                    msg = f"⚠️ *Partially completed: {success_count}/{total_segments} segments created*\n{apps_summary}\n\n"
                     if created_segments:
                         msg += f"✅ *Created ({success_count}):*\n" + "\n".join([f"• `{name}`" for name in created_segments[:10]])
                         if len(created_segments) > 10:
@@ -480,7 +517,7 @@ def handle_multiple_segments_submission(ack, body, client):
                         if len(failed_segments) > 10:
                             msg += f"\n... and {len(failed_segments) - 10} more"
                 else:
-                    msg = f"❌ *Failed to create any segments ({total_segments} total)*\n\n"
+                    msg = f"❌ *Failed to create any segments ({total_segments} total)*\n{apps_summary}\n\n"
                     if failed_segments:
                         msg += f"📋 *Failed segments:*\n" + "\n".join([f"• `{name}`" for name in failed_segments[:20]])
                         if len(failed_segments) > 20:
