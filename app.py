@@ -10,7 +10,7 @@ from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 
 import appgrowth
-from countries import POPULAR_COUNTRIES
+from countries import POPULAR_COUNTRIES, ALL_VALID_COUNTRY_CODES
 
 # Logging setup
 logging.basicConfig(
@@ -57,21 +57,32 @@ def try_login():
         return False
 
 def parse_bulk_countries(bulk_text):
-    """Parse bulk country codes from text input (supports newlines, commas, and spaces)"""
+    """
+    Parse bulk country codes from text input (supports newlines, commas, and spaces).
+    Validates codes against ALL_VALID_COUNTRY_CODES.
+
+    Returns:
+        tuple: (valid_codes, invalid_codes) - two lists of country codes
+    """
     if not bulk_text or not bulk_text.strip():
-        return []
+        return [], []
 
     # Replace commas with spaces, then split by any whitespace
     text = bulk_text.replace(',', ' ')
     codes = text.split()
 
-    parsed_codes = []
+    valid_codes = []
+    invalid_codes = []
+
     for code in codes:
         code = code.strip().upper()
         if code:
-            parsed_codes.append(code)
+            if code in ALL_VALID_COUNTRY_CODES:
+                valid_codes.append(code)
+            else:
+                invalid_codes.append(code)
 
-    return parsed_codes
+    return valid_codes, invalid_codes
 
 def generate_segment_name(app_id, country, seg_type, value):
     """Generate segment name with UPPERCASE country code"""
@@ -326,10 +337,10 @@ def handle_multiple_segments_submission(ack, body, client):
         # Get countries from bulk text
         bulk_data = values.get("bulk_countries_block", {}).get("bulk_countries_input", {})
         bulk_text = bulk_data.get("value", "") if bulk_data.get("value") else ""
-        countries_bulk = parse_bulk_countries(bulk_text)
+        countries_bulk_valid, countries_bulk_invalid = parse_bulk_countries(bulk_text)
 
         # Merge and deduplicate countries
-        countries = list(set(countries_dropdown + countries_bulk))
+        countries = list(set(countries_dropdown + countries_bulk_valid))
 
         # Check if "ALL segments" checkbox is selected
         all_segments_data = values.get("all_segments_block", {}).get("all_segments_input", {})
@@ -345,7 +356,7 @@ def handle_multiple_segments_submission(ack, body, client):
         else:
             segment_types = segment_types_manual
 
-        logger.info(f"📱 App ID: '{app_id}', 🌍 Countries (dropdown): {countries_dropdown}, 🌍 Countries (bulk): {countries_bulk}, 🌍 Total: {countries}, ✅ ALL segments: {all_segments_checked}, 📊 Types: {segment_types}")
+        logger.info(f"📱 App ID: '{app_id}', 🌍 Countries (dropdown): {countries_dropdown}, 🌍 Countries (bulk valid): {countries_bulk_valid}, 🌍 Countries (bulk invalid): {countries_bulk_invalid}, 🌍 Total: {countries}, ✅ ALL segments: {all_segments_checked}, 📊 Types: {segment_types}")
 
         errors = {}
 
@@ -353,6 +364,11 @@ def handle_multiple_segments_submission(ack, body, client):
             errors["app_id_block"] = "Enter app Bundle ID"
         elif len(app_id) < 5:
             errors["app_id_block"] = "Bundle ID too short"
+
+        # Check for invalid country codes in bulk input
+        if countries_bulk_invalid:
+            invalid_codes_str = ", ".join(countries_bulk_invalid)
+            errors["bulk_countries_block"] = f"Invalid country codes: {invalid_codes_str}. Use valid ISO 3166-1 alpha-3 codes (e.g., USA, GBR, DEU)"
 
         if not countries:
             errors["countries_block"] = "Select countries from dropdown or enter bulk text"
